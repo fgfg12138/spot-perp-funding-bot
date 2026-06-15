@@ -110,26 +110,26 @@ export default function SpreadOpportunitiesPage() {
   }, [mode, loadRealData]);
 
   return (
-    <PageShell activeHref="/spread-opportunities" title="跨所套利" description="跨交易所资金费率套利 — Mock Paper / Real Data Shadow" showRefresh={false}>
+    <PageShell activeHref="/spread-opportunities" title="价差机会" description="跨交易所资金费率套利 — 模拟纸交易 / 实时数据影子" showRefresh={false}>
       {/* ── Safety Banner ── */}
       <section className="border border-amber-800/40 bg-amber-950/20">
         <div className="flex flex-wrap items-center gap-3 px-4 py-2 text-xs">
-          <span className="font-semibold text-amber-200">{mode === "mock" ? "Paper Trading" : "Real Data Shadow"}</span>
+          <span className="font-semibold text-amber-200">{mode === "mock" ? "纸面交易" : "实时数据影子"}</span>
           <span className="text-slate-500">|</span>
           <span className="text-slate-400">Real Orders: <span className="text-red-300 font-medium">0</span></span>
           <span className="text-slate-500">|</span>
           <span className="text-slate-400">Trading: <span className="text-red-300 font-medium">Disabled</span></span>
           <span className="text-slate-500">|</span>
-          <span className="text-slate-400">Source: {mode === "mock" ? "Mock Connectors" : "Public Funding APIs"}</span>
+          <span className="text-slate-400">数据源: {mode === "mock" ? "模拟连接器" : "公开资金费率 API"}</span>
           <span className="text-slate-500">|</span>
-          <span className="text-yellow-200 font-medium">⚠️ Read-only — not live trading</span>
+          <span className="text-yellow-200 font-medium">⚠️ 只读 — 不进行真实交易</span>
         </div>
       </section>
 
       {/* ── Mode Toggle ── */}
       <section className="border border-slate-800 bg-slate-950/60">
         <div className="flex items-center gap-3 px-4 py-2">
-          <span className="text-xs text-slate-400">Data Mode:</span>
+          <span className="text-xs text-slate-400">数据模式:</span>
           {(["mock", "real"] as const).map((m) => (
             <button
               key={m}
@@ -137,11 +137,11 @@ export default function SpreadOpportunitiesPage() {
               onClick={() => setMode(m)}
               type="button"
             >
-              {m === "mock" ? "🧪 Mock Paper" : "🔭 Real Data Shadow"}
+              {m === "mock" ? "🧪 模拟纸交易" : "🔭 实时数据影子"}
             </button>
           ))}
           {realError && mode === "real" && (
-            <span className="text-xs text-red-300">⚠️ Some real data unavailable</span>
+            <span className="text-xs text-red-300">⚠️ 部分实时数据不可用</span>
           )}
         </div>
       </section>
@@ -155,7 +155,7 @@ export default function SpreadOpportunitiesPage() {
                 <span className="text-sm font-semibold text-slate-100">{name}</span>
                 <ExchangeHealthBadge status={h.status} />
               </div>
-              <p className="mt-1 text-xs text-slate-500">latency: {h.latencyMs ? `${h.latencyMs}ms` : "N/A"}</p>
+              <p className="mt-1 text-xs text-slate-500">延迟: {h.latencyMs ? `${h.latencyMs}ms` : "N/A"}</p>
             </div>
           ))}
         </section>
@@ -166,8 +166,8 @@ export default function SpreadOpportunitiesPage() {
         <section className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
           <StatCard label="最高净 APY" value={displayData.topOpp ? `${displayData.topOpp.netSpreadApy.toFixed(1)}%` : "-"} tone="green" />
           <StatCard label="发现机会" value={String(displayData.opportunities.length)} tone="cyan" />
-          <StatCard label={mode === "mock" ? "模拟持仓" : "Real Positions"} value={mode === "mock" ? String(displayData.report.openPositionCount) : "N/A (read-only)"} tone="slate" />
-          <StatCard label={mode === "mock" ? "模拟总 Funding" : "Real Funding Data"} value={mode === "mock" ? `$${displayData.report.totalFundingCollectedUsd.toFixed(2)}` : "Read-only"} tone={mode === "mock" && displayData.report.totalFundingCollectedUsd >= 0 ? "green" : "slate"} />
+          <StatCard label={mode === "mock" ? "模拟持仓" : "真实持仓"} value={mode === "mock" ? String(displayData.report.openPositionCount) : "N/A（只读）"} tone="slate" />
+          <StatCard label={mode === "mock" ? "模拟总资金费" : "真实资金费数据"} value={mode === "mock" ? `$${displayData.report.totalFundingCollectedUsd.toFixed(2)}` : "只读"} tone={mode === "mock" && displayData.report.totalFundingCollectedUsd >= 0 ? "green" : "slate"} />
           <StatCard label="最佳配对" value={displayData.topOpp ? `${displayData.topOpp.shortExchangeId}-${displayData.topOpp.longExchangeId}` : "-"} tone="cyan" />
         </section>
       ) : (
@@ -184,29 +184,29 @@ export default function SpreadOpportunitiesPage() {
       {/* ── Spread Opportunities Table ── */}
       <section className="border border-slate-800 bg-slate-950/60">
         <div className="border-b border-slate-800 px-4 py-2">
-          <h2 className="text-sm font-semibold text-white">Spread 机会</h2>
-          <span className="ml-2 text-xs text-slate-500">Source: {mode === "mock" ? "Mock" : "Real"}</span>
+          <h2 className="text-sm font-semibold text-white">价差机会</h2>
+          <span className="ml-2 text-xs text-slate-500">数据源: {mode === "mock" ? "模拟" : "实时"}</span>
         </div>
         <div className="max-h-[400px] overflow-auto">
           <table className="min-w-[1200px] border-collapse text-sm">
             <thead className="sticky top-0 z-10 bg-slate-950 text-xs uppercase tracking-wide text-slate-500">
               <tr className="border-b border-slate-800">
-                <th className="px-3 py-2 text-left">Symbol</th>
-                <th className="px-3 py-2 text-left">Short</th>
-                <th className="px-3 py-2 text-left">Long</th>
-                <th className="px-3 py-2 text-right">Short Rate</th>
-                <th className="px-3 py-2 text-right">Long Rate</th>
-                <th className="px-3 py-2 text-right">Spread</th>
-                <th className="px-3 py-2 text-right">APY</th>
-                <th className="px-3 py-2 text-right">Net APY</th>
-                <th className="px-3 py-2 text-right">Score</th>
-                <th className="px-3 py-2 text-center">Source</th>
-                <th className="px-3 py-2 text-center">Action</th>
+                <th className="px-3 py-2 text-left">币种</th>
+                <th className="px-3 py-2 text-left">空头</th>
+                <th className="px-3 py-2 text-left">多头</th>
+                <th className="px-3 py-2 text-right">空头费率</th>
+                <th className="px-3 py-2 text-right">多头费率</th>
+                <th className="px-3 py-2 text-right">价差</th>
+                <th className="px-3 py-2 text-right">年化</th>
+                <th className="px-3 py-2 text-right">净年化</th>
+                <th className="px-3 py-2 text-right">评分</th>
+                <th className="px-3 py-2 text-center">数据源</th>
+                <th className="px-3 py-2 text-center">操作</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800">
               {(displayData?.opportunities.length ?? 0) === 0 && (
-                <tr><td className="px-4 py-8 text-center text-sm text-slate-500" colSpan={11}>暂无 spread 机会。</td></tr>
+                <tr><td className="px-4 py-8 text-center text-sm text-slate-500" colSpan={11}>暂无价差机会。</td></tr>
               )}
               {displayData?.opportunities.slice(0, 20).map((opp) => (
                 <tr className="bg-slate-950/20 hover:bg-slate-900/70" key={opp.id}>
@@ -222,7 +222,7 @@ export default function SpreadOpportunitiesPage() {
                   <td className="px-3 py-2 text-center"><SpreadSourceBadge isReal={mode === "real"} /></td>
                   <td className="px-3 py-2 text-center">
                     <span className={`border px-2 py-0.5 text-xs ${mode === "mock" ? "border-amber-400/40 bg-amber-400/10 text-amber-200" : "border-cyan-400/40 bg-cyan-400/10 text-cyan-200"}`}>
-                      {mode === "mock" ? "Paper Only" : "Read Only"}
+                      {mode === "mock" ? "仅纸面" : "仅只读"}
                     </span>
                   </td>
                 </tr>
@@ -272,8 +272,8 @@ export default function SpreadOpportunitiesPage() {
               <h2 className="text-sm font-semibold text-white">模拟摘要</h2>
             </div>
             <div className="grid gap-2 p-4 sm:grid-cols-2">
-              <StatCard label="总 PnL" value={`$${mockData.report.totalPnlUsd.toFixed(2)}`} tone={mockData.report.totalPnlUsd >= 0 ? "green" : "red"} />
-              <StatCard label="Funding 收入" value={`$${mockData.report.totalFundingCollectedUsd.toFixed(2)}`} tone="cyan" />
+              <StatCard label="总盈亏" value={`$${mockData.report.totalPnlUsd.toFixed(2)}`} tone={mockData.report.totalPnlUsd >= 0 ? "green" : "red"} />
+              <StatCard label="资金费收入" value={`$${mockData.report.totalFundingCollectedUsd.toFixed(2)}`} tone="cyan" />
               <StatCard label="资本利用率" value={`${mockData.report.capitalUtilizationPercent.toFixed(1)}%`} tone="slate" />
               <StatCard label="已平仓数" value={String(mockData.report.closedPositionCount)} tone="slate" />
             </div>
@@ -292,15 +292,15 @@ export default function SpreadOpportunitiesPage() {
             <li>同一永续合约在不同交易所的 funding rate 不同</li>
             <li>在 funding rate <strong className="text-emerald-300">较高</strong> 的交易所 <strong className="text-slate-200">做空</strong>（收 funding）</li>
             <li>在 funding rate <strong className="text-emerald-300">较低</strong> 的交易所 <strong className="text-slate-200">做多</strong>（收 funding）</li>
-            <li>spread = shortRate - longRate，即每 funding interval 的净收入</li>
+            <li>价差 = 空头费率 - 多头费率，即每期资金费结算的净收入</li>
           </ul>
           <div className="mt-2 grid gap-2 sm:grid-cols-2">
             <div className="border border-amber-800/30 bg-amber-950/10 px-3 py-2">
-              <p className="text-xs font-semibold text-amber-200">🧪 Mock Paper</p>
+              <p className="text-xs font-semibold text-amber-200">🧪 模拟纸交易</p>
               <p className="mt-0.5 text-xs text-slate-500">使用 Mock Connectors，6 个交易所模拟数据。包含 Paper Trader 模拟开平仓。</p>
             </div>
             <div className="border border-cyan-800/30 bg-cyan-950/10 px-3 py-2">
-              <p className="text-xs font-semibold text-cyan-200">🔭 Real Data Shadow</p>
+              <p className="text-xs font-semibold text-cyan-200">🔭 实时数据影子</p>
               <p className="mt-0.5 text-xs text-slate-500">使用 Real Connectors 读取真实 Binance/Bybit/OKX 公开 funding 数据。只读，不下单。</p>
             </div>
           </div>
@@ -322,14 +322,14 @@ function ScoreBadge({ score }: { score: number }) {
 
 function SpreadSourceBadge({ isReal }: { isReal: boolean }) {
   if (isReal) {
-    return <span className="border border-cyan-400/40 bg-cyan-400/10 px-2 py-0.5 text-xs text-cyan-200">Real</span>;
+    return <span className="border border-cyan-400/40 bg-cyan-400/10 px-2 py-0.5 text-xs text-cyan-200">实时</span>;
   }
-  return <span className="border border-slate-700 bg-slate-900 px-2 py-0.5 text-xs text-slate-400">Mock</span>;
+  return <span className="border border-slate-700 bg-slate-900 px-2 py-0.5 text-xs text-slate-400">模拟</span>;
 }
 
 function ExchangeHealthBadge({ status }: { status: string }) {
-  if (status === "healthy") return <span className="border border-emerald-400/40 bg-emerald-400/10 px-2 py-0.5 text-xs text-emerald-200">Healthy</span>;
-  return <span className="border border-red-400/40 bg-red-400/10 px-2 py-0.5 text-xs text-red-200">Down</span>;
+  if (status === "healthy") return <span className="border border-emerald-400/40 bg-emerald-400/10 px-2 py-0.5 text-xs text-emerald-200">健康</span>;
+  return <span className="border border-red-400/40 bg-red-400/10 px-2 py-0.5 text-xs text-red-200">故障</span>;
 }
 
 function PositionCard({ position }: { position: SpreadPaperPosition }) {
@@ -343,7 +343,7 @@ function PositionCard({ position }: { position: SpreadPaperPosition }) {
         <span className={`text-xs font-medium ${position.totalPnlUsd >= 0 ? "text-emerald-300" : "text-red-300"}`}>${position.totalPnlUsd.toFixed(2)}</span>
       </div>
       <div className="mt-1 flex gap-3 text-xs text-slate-500">
-        <span>Funding: ${position.fundingCollectedUsd.toFixed(4)}</span>
+        <span>资金费: ${position.fundingCollectedUsd.toFixed(4)}</span>
         <span>Spread: {(position.currentSpreadRate * 100).toFixed(4)}%</span>
       </div>
     </div>

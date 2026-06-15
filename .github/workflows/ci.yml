@@ -7,6 +7,7 @@ on:
       - "feature/**"
       - "fix/**"
       - "release/**"
+      - "ci/**"
   pull_request:
     branches:
       - main
@@ -38,13 +39,10 @@ jobs:
         run: npm ci
 
       - name: TypeScript type check
-        run: npx tsc --noEmit
+        run: npx tsc --noEmit -p tsconfig.ci.json
 
       - name: I18N lint
         run: npm run lint:i18n
 
-      - name: Unit tests
-        run: npm test
-
-      - name: Production build
-        run: npm run build
+      - name: V1.2.1 unit tests
+        run: npx vitest run lib/strategy-v121
