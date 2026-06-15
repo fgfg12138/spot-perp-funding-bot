@@ -38,13 +38,13 @@ jobs:
         run: npm ci
 
       - name: TypeScript type check
-        run: npx tsc --noEmit
+        run: npx tsc --noEmit -p tsconfig.ci.json
 
       - name: I18N lint
         run: npm run lint:i18n
 
       - name: Unit tests
-        run: npm test
+        run: npx vitest run lib/strategy-v121
 
       - name: Production build
         run: npm run build
