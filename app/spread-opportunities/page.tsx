@@ -184,24 +184,26 @@ export default function SpreadOpportunitiesPage() {
       {/* ── Spread Opportunities Table ── */}
       <section className="border border-slate-800 bg-slate-950/60">
         <div className="border-b border-slate-800 px-4 py-2">
-          <h2 className="text-sm font-semibold text-white">Spread 机会</h2>
-          <span className="ml-2 text-xs text-slate-500">Source: {mode === "mock" ? "Mock" : "Real"}</span>
+          <h2 className="text-sm font-semibold text-white">价差机会</h2>
+          <span className="ml-2 text-xs text-slate-500">
+           数据源: {mode === "mock" ? "模拟" : "实时"}
+          </span>
         </div>
         <div className="max-h-[400px] overflow-auto">
           <table className="min-w-[1200px] border-collapse text-sm">
             <thead className="sticky top-0 z-10 bg-slate-950 text-xs uppercase tracking-wide text-slate-500">
               <tr className="border-b border-slate-800">
-                <th className="px-3 py-2 text-left">Symbol</th>
-                <th className="px-3 py-2 text-left">Short</th>
-                <th className="px-3 py-2 text-left">Long</th>
-                <th className="px-3 py-2 text-right">Short Rate</th>
-                <th className="px-3 py-2 text-right">Long Rate</th>
-                <th className="px-3 py-2 text-right">Spread</th>
-                <th className="px-3 py-2 text-right">APY</th>
-                <th className="px-3 py-2 text-right">Net APY</th>
-                <th className="px-3 py-2 text-right">Score</th>
-                <th className="px-3 py-2 text-center">Source</th>
-                <th className="px-3 py-2 text-center">Action</th>
+                <th className="px-3 py-2 text-left">币种</th>
+                <th className="px-3 py-2 text-left">空头</th>
+                <th className="px-3 py-2 text-left">多头</th>
+                <th className="px-3 py-2 text-right">空头费率</th>
+                <th className="px-3 py-2 text-right">多头费率</th>
+                <th className="px-3 py-2 text-right">价差</th>
+                <th className="px-3 py-2 text-right">年化</th>
+                <th className="px-3 py-2 text-right">净年化</th>
+                <th className="px-3 py-2 text-right">评分</th>
+                <th className="px-3 py-2 text-center">数据源</th>
+                <th className="px-3 py-2 text-center">操作</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800">
