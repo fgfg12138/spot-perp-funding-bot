@@ -7,6 +7,14 @@ export * from "./domain/errors";
 
 export * from "./market/basis";
 export * from "./market/vwap";
+export * from "./market/orderBook";
+export * from "./market/symbolMap";
+export * from "./market/contractSpec";
+export * from "./market/fundingNormalize";
+export * from "./market/adapters/types";
+export * from "./market/adapters/binancePublicAdapter";
+export * from "./market/adapters/okxPublicAdapter";
+export * from "./market/adapters/htxPublicAdapter";
 
 export * from "./opportunity/hardFilters";
 export * from "./opportunity/scoring";
