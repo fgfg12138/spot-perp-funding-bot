@@ -6,6 +6,7 @@ node_modules/
 *.log
 .env
 .env.local
+.env*.local
 .DS_Store
 dist/
 build/

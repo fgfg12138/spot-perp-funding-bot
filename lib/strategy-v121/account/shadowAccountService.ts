@@ -83,9 +83,18 @@ export async function getShadowReport(): Promise<ShadowAccountReport & { dataSou
     if (dataSource === "real") {
       try {
         const [balances, positions, orders] = await Promise.all([
-          adapter.fetchBalances().catch(() => [] as AccountBalanceSnapshot[]),
-          adapter.fetchPositions().catch(() => [] as AccountPositionSnapshot[]),
-          adapter.fetchOpenOrders().catch(() => [] as OpenOrderSnapshot[]),
+          adapter.fetchBalances().catch((e: Error) => {
+            warnings.push(`${exchange} 余额读取失败: ${e.message}`);
+            return [] as AccountBalanceSnapshot[];
+          }),
+          adapter.fetchPositions().catch((e: Error) => {
+            warnings.push(`${exchange} 仓位读取失败: ${e.message}`);
+            return [] as AccountPositionSnapshot[];
+          }),
+          adapter.fetchOpenOrders().catch((e: Error) => {
+            warnings.push(`${exchange} 挂单读取失败: ${e.message}`);
+            return [] as OpenOrderSnapshot[];
+          }),
         ]);
         allBalances.push(...balances);
         allPositions.push(...positions);

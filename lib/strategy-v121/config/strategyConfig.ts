@@ -14,7 +14,7 @@ export interface StrategyConfig {
 }
 
 export const DEFAULT_CONFIG: StrategyConfig = {
-  mode: "READ_ONLY",
+  mode: (process.env.V121_MODE as StrategyMode) ?? "READ_ONLY",
   enabledExchanges: ["binance", "okx", "htx"],
   plannedNotional: 10000,
   phase: "tiny",
