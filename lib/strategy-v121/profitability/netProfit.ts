@@ -14,7 +14,7 @@ export interface NetProfitInput {
   isTakerEntry: boolean;
   spotSlippage: number;
   perpSlippage: number;
-  phase: "test" | "stable" | "mature";
+  phase: "tiny" | "controlled" | "mature";
 }
 
 export interface NetProfitResult {
@@ -118,10 +118,10 @@ function getMinRequiredRate(path: { spotExchange: string; perpExchange: string }
   return NET_PROFIT_THRESHOLDS[key] ?? 0.007;
 }
 
-function getMinRequiredProfit(phase: "test" | "stable" | "mature"): number {
+function getMinRequiredProfit(phase: "tiny" | "controlled" | "mature"): number {
   switch (phase) {
-    case "test": return 5;
-    case "stable": return 10;
+    case "tiny": return 5;
+    case "controlled": return 10;
     case "mature": return 20;
   }
 }

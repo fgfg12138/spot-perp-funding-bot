@@ -4,7 +4,7 @@ export type ExchangeId = "binance" | "okx" | "htx";
 
 export type MarketType = "spot" | "perp";
 
-export type StrategyMode = "READ_ONLY" | "PAPER" | "SHADOW" | "TESTNET" | "LIVE";
+export type StrategyMode = "READ_ONLY" | "PAPER" | "SHADOW" | "MAINNET_TINY" | "CONTROLLED_LIVE";
 
 export type PositionSide = "spot_long" | "perp_short";
 

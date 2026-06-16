@@ -48,8 +48,8 @@ export const NET_PROFIT_THRESHOLDS: Record<string, number> = {
 };
 
 export const STOP_LOSS = {
-  TESTNET: 0.002,     // 0.2%
-  STABLE: 0.003,     // 0.3%
+  TINY: 0.002,       // 0.2% — MAINNET_TINY
+  CONTROLLED: 0.003,  // 0.3% — CONTROLLED_LIVE
   MATURE: 0.005,     // 0.5%
 } as const;
 

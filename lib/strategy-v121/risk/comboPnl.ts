@@ -40,9 +40,9 @@ export function calcComboPnl(input: ComboPnlInput): ComboPnlResult {
 export function checkHardStopLoss(
   comboLoss: number,
   totalEquity: number,
-  phase: "test" | "stable" | "mature"
+  phase: "tiny" | "controlled" | "mature"
 ): { triggered: boolean; threshold: number; lossRatio: number } {
-  const thresholdMap = { test: 0.002, stable: 0.003, mature: 0.005 };
+  const thresholdMap = { tiny: 0.002, controlled: 0.003, mature: 0.005 };
   const threshold = thresholdMap[phase];
   const lossRatio = totalEquity > 0 ? comboLoss / totalEquity : 0;
   return { triggered: lossRatio >= threshold, threshold, lossRatio };

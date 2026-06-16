@@ -6,7 +6,7 @@ export default function SettingsPage() {
         <section className="bg-gray-900 rounded-lg border border-gray-800 p-4">
           <h3 className="text-lg font-semibold mb-3 text-cyan-400">系统模式</h3>
           <div className="flex gap-2">
-            {(["READ_ONLY", "PAPER", "SHADOW", "TESTNET", "LIVE"] as const).map((mode) => (
+            {(["READ_ONLY", "PAPER", "SHADOW", "MAINNET_TINY", "CONTROLLED_LIVE"] as const).map((mode) => (
               <span key={mode} className={`px-3 py-1 rounded text-sm font-medium ${
                 mode === "READ_ONLY" ? "bg-cyan-900 text-cyan-300" : "bg-gray-800 text-gray-500"
               }`}>{mode}</span>

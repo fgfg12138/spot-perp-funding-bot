@@ -11,7 +11,7 @@ export interface RiskArbiterInput {
   adlLevel: ADLLevel;
   depthDeclinePercent: number;
   spreadChangeRatio: number;
-  phase: "test" | "stable" | "mature";
+  phase: "tiny" | "controlled" | "mature";
 }
 
 export function arbitrateRisk(input: RiskArbiterInput): RiskDecision {

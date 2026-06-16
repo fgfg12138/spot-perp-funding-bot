@@ -27,12 +27,12 @@ describe("calcComboPnl", () => {
 
 describe("checkHardStopLoss", () => {
   it("triggers at 0.2% in test phase", () => {
-    const r = checkHardStopLoss(20, 10000, "test");
+    const r = checkHardStopLoss(20, 10000, "tiny");
     expect(r.triggered).toBe(true);
   });
 
   it("does not trigger below threshold", () => {
-    const r = checkHardStopLoss(10, 10000, "test");
+    const r = checkHardStopLoss(10, 10000, "tiny");
     expect(r.triggered).toBe(false);
   });
 });

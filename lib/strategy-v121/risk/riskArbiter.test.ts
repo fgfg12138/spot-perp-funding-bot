@@ -6,7 +6,7 @@ const healthy: RiskArbiterInput = {
   spotNotional: 1000, perpNotional: 1000,
   comboLoss: 0, totalEquity: 10000, peakEquity: 10000,
   adlLevel: "low", depthDeclinePercent: 0, spreadChangeRatio: 1,
-  phase: "test",
+  phase: "tiny",
 };
 
 describe("arbitrateRisk", () => {

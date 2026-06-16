@@ -6,7 +6,7 @@ export interface RiskServiceInput {
   position: PositionSnapshot;
   totalEquity: number;
   peakEquity: number;
-  phase: "test" | "stable" | "mature";
+  phase: "tiny" | "controlled" | "mature";
   depthDeclinePercent: number;
   spreadChangeRatio: number;
 }

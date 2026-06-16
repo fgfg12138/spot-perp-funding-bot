@@ -15,7 +15,7 @@ const baseInput: NetProfitInput = {
   isTakerEntry: false,
   spotSlippage: 0.0005,
   perpSlippage: 0.0005,
-  phase: "test",
+  phase: "tiny",
 };
 
 describe("calcNetProfit", () => {
@@ -48,7 +48,7 @@ describe("calcNetProfit", () => {
     expect(taker.expectedNetRate).toBeLessThan(maker.expectedNetRate);
   });
 
-  it("test phase minimum profit is 5 USDT", () => {
+  it("tiny phase minimum profit is 5 USDT", () => {
     const r = calcNetProfit({ ...baseInput, plannedNotional: 500 });
     expect(r.minRequiredProfit).toBe(5);
   });
