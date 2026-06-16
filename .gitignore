@@ -1,6 +1,8 @@
 node_modules/
 .next/
 .data/
+.v121-worker/
+.v121-data/
 *.log
 .env
 .env.local
