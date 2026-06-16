@@ -38,6 +38,10 @@ export * from "./risk/killSwitch";
 
 export * from "./health/freezeState";
 
+export * from "./account/accountTypes";
+export * from "./account/accountSafety";
+export * from "./account/shadowAccountService";
+
 export * from "./worker/runState";
 export * from "./worker/heartbeat";
 export * from "./worker/scheduler";

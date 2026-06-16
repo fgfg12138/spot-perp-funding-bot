@@ -24,7 +24,7 @@ export default function RiskCenterPage() {
       <h2 className="text-2xl font-bold mb-6">风控中心</h2>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <RiskCard label="Kill Switch" value={data?.killSwitch === "OFF" ? "关闭" : data?.killSwitch ?? "—"} color={data?.killSwitch === "OFF" ? "green" : "red"} />
+        <RiskCard label="Kill Switch" value={data?.killSwitch === "OFF" ? "关闭" : data?.killSwitch === "READ_ONLY_ONLY" ? "仅只读" : data?.killSwitch === "PAUSE_NEW_ENTRIES" ? "暂停新开仓" : data?.killSwitch === "PAUSE_ALL_AUTOMATION" ? "暂停全部" : data?.killSwitch ?? "—"} color={data?.killSwitch === "OFF" ? "green" : "red"} />
         <RiskCard label="冻结状态" value={data?.freezeLevel === "none" ? "无" : data?.freezeLevel ?? "—"} color={data?.freezeLevel === "none" ? "green" : "red"} />
         <RiskCard label="可交易" value={data?.canTrade ? "是" : "否"} color={data?.canTrade ? "green" : "red"} />
         <RiskCard label="执行中" value={String(data?.openExecutionCount ?? 0)} color="blue" />
@@ -42,7 +42,7 @@ export default function RiskCenterPage() {
               onClick={() => setKS(s)}
               className={`px-3 py-1 text-xs border ${data?.killSwitch === s ? "border-cyan-400 bg-cyan-900 text-cyan-200" : "border-gray-700 text-gray-400 hover:border-gray-500"}`}
             >
-              {s}
+              {({ OFF: "关闭", READ_ONLY_ONLY: "仅只读", PAUSE_NEW_ENTRIES: "暂停新开仓", PAUSE_ALL_AUTOMATION: "暂停全部" } as any)[s]}
             </button>
           ))}
         </div>

@@ -35,7 +35,9 @@ export default function SettingsPage() {
           <h3 className="text-lg font-semibold mb-3 text-red-400">Kill Switch</h3>
           <div className="text-sm">
             <span className="text-gray-400">当前状态: </span>
-            <span className={ks?.killSwitch === "OFF" ? "text-green-400 font-bold" : "text-red-400 font-bold"}>{ks?.killSwitch ?? "—"}</span>
+            <span className={ks?.killSwitch === "OFF" ? "text-green-400 font-bold" : "text-red-400 font-bold"}>
+              {ks ? ({ OFF: "关闭", READ_ONLY_ONLY: "仅只读", PAUSE_NEW_ENTRIES: "暂停新开仓", PAUSE_ALL_AUTOMATION: "暂停全部自动化" } as any)[ks.killSwitch] ?? ks.killSwitch : "—"}
+            </span>
           </div>
           <div className="flex flex-wrap gap-2 mt-2">
             {(["OFF", "READ_ONLY_ONLY", "PAUSE_NEW_ENTRIES", "PAUSE_ALL_AUTOMATION"] as const).map(s => (
@@ -43,7 +45,9 @@ export default function SettingsPage() {
                 await fetch("/api/v121/risk/kill-switch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ state: s }) });
                 const r = await fetch("/api/v121/risk/kill-switch");
                 setKs(await r.json());
-              }} className={`px-2 py-1 text-xs border ${ks?.killSwitch === s ? "border-cyan-400 bg-cyan-900 text-cyan-200" : "border-gray-700 text-gray-400"}`}>{s}</button>
+              }} className={`px-2 py-1 text-xs border ${ks?.killSwitch === s ? "border-cyan-400 bg-cyan-900 text-cyan-200" : "border-gray-700 text-gray-400"}`}>
+                {{ OFF: "关闭", READ_ONLY_ONLY: "仅只读", PAUSE_NEW_ENTRIES: "暂停新开仓", PAUSE_ALL_AUTOMATION: "暂停全部" }[s] ?? s}
+              </button>
             ))}
           </div>
         </section>

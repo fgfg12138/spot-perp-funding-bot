@@ -30,7 +30,7 @@ type BybitSpotTicker = {
   turnover24h?: string;
 };
 
-const BASE = EXCHANGE_API_URLS.BYBIT;
+const BASE = "https://api.bybit.com"; // Legacy — not part of V1.2.1 mainline
 
 export async function fetchBybitFundingMarkets(): Promise<FundingMarket[]> {
   const fetchedAt = Date.now();
