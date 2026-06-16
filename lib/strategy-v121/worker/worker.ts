@@ -21,6 +21,9 @@ export class V121Worker {
   private scheduler: Scheduler;
   private config: WorkerConfig;
   private dryRun: boolean;
+  private scanning = false;
+  private consecutiveErrors = 0;
+  private readonly maxConsecutiveErrors = 5;
 
   constructor(config: WorkerConfig, dryRun = false) {
     this.config = config;
@@ -53,7 +56,13 @@ export class V121Worker {
     const mode = config.mode;
     const ks = getKillSwitch();
 
-    // 1. Kill Switch 检查
+    // 重入保护
+    if (this.scanning) {
+      emitHeartbeat(this.config.workerId, mode);
+      return;
+    }
+
+    // Kill switch
     if (ks === "PAUSE_ALL_AUTOMATION") {
       setRunState("paused");
       emitHeartbeat(this.config.workerId, mode);
@@ -65,6 +74,7 @@ export class V121Worker {
       return;
     }
 
+    this.scanning = true;
     try {
       // 2. 刷新真实行情 + 扫描机会 + 持久化
       const refreshResult = await refreshAndScan({
@@ -139,13 +149,21 @@ export class V121Worker {
 
       // 10. 心跳
       incrementCycle();
+      this.consecutiveErrors = 0;
       setRunState("running");
       emitHeartbeat(this.config.workerId, mode);
 
     } catch (err) {
-      setRunState("error");
+      this.consecutiveErrors++;
+      if (this.consecutiveErrors >= this.maxConsecutiveErrors) {
+        setRunState("error");
+      } else {
+        setRunState("running");
+      }
       setLastError((err as Error).message);
       emitHeartbeat(this.config.workerId, mode);
+    } finally {
+      this.scanning = false;
     }
   }
 }

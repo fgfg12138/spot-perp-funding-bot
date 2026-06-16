@@ -37,6 +37,20 @@ export default function OpportunitiesPage() {
         {data?.mode === "READ_ONLY" && " — 只读模式，需 Worker 驱动行情数据"}
       </p>
 
+      {data && (
+        <div className="text-xs text-gray-500 mb-4 space-y-1">
+          <div>最近扫描: {data.scannedAtUtc ? new Date(data.scannedAtUtc).toLocaleString("zh-CN") : "未扫描"} | 耗时: {data.durationMs ? `${data.durationMs}ms` : "—"}</div>
+          <div>数据源: {data.dataSource === "real_market" ? "实时行情" : data.dataSource === "no_data" ? "无数据" : "含错误的实时行情"}</div>
+          <div>总路径: {data.total ?? 0} | 通过: {data.passedCount ?? 0} | 淘汰: {data.rejectedCount ?? 0}</div>
+          {data.rejectSummary && Object.keys(data.rejectSummary).length > 0 && (
+            <div>主要淘汰原因: {Object.entries(data.rejectSummary as Record<string, number>).slice(0, 5).map(([k, v]) => `${k}: ${v}`).join(", ")}</div>
+          )}
+          {data.errors?.length > 0 && (
+            <div className="text-red-400">读取错误: {data.errors.map((e: any) => `${e.exchange}/${e.symbol}`).join(", ")}</div>
+          )}
+        </div>
+      )}
+
       <div className="bg-gray-900 rounded-lg border border-gray-800 p-4">
         <table className="w-full text-sm">
           <thead>

@@ -1,49 +1,61 @@
 import { NextResponse } from "next/server";
-import { scanOpportunities } from "@/lib/strategy-v121/opportunity/scanner";
+import { refreshAndScan } from "@/lib/strategy-v121/market/marketRefreshService";
+import { saveLatestScan } from "@/lib/strategy-v121/opportunity/opportunityStore";
 import { getConfig } from "@/lib/strategy-v121/config/strategyConfig";
-import type { MarketSnapshot } from "@/lib/strategy-v121/domain/types";
 
-/**
- * POST /api/v121/opportunities/scan — trigger a fresh opportunity scan
- *
- * Returns scanned opportunities with scores, levels, and reject reasons.
- * Uses empty snapshots in READ_ONLY mode (returns 0 opportunities).
- */
+/** POST /api/v121/opportunities/scan — 手动触发一次真实行情扫描 */
 export async function POST() {
   const config = getConfig();
+  const start = Date.now();
 
-  const output = scanOpportunities({
-    spotSnapshots: new Map<string, MarketSnapshot>(),
-    perpSnapshots: new Map<string, MarketSnapshot>(),
-    systemHealthy: true,
-    activeCooldowns: [],
-    plannedNotional: config.plannedNotional,
-    makerRate: config.makerRate,
-    takerRate: config.takerRate,
-    isTakerEntry: false,
-  });
+  try {
+    const result = await refreshAndScan({
+      plannedNotional: config.plannedNotional,
+      makerRate: config.makerRate,
+      takerRate: config.takerRate,
+      isTakerEntry: false,
+      systemHealthy: true,
+    });
+    const durationMs = Date.now() - start;
+    const scan = result.scanResult!;
 
-  return NextResponse.json({
-    opportunities: output.opportunities.map(o => ({
-      id: o.id,
-      symbol: o.path.symbol,
-      spotExchange: o.path.spotExchange,
-      perpExchange: o.path.perpExchange,
-      funding8h: o.funding8h,
-      entryBasis: o.entryExecutableBasis,
-      score: o.score,
-      level: o.level,
-      passed: o.passed,
-      rejectReasons: o.rejectReasons,
-      warnings: o.warnings,
-      nextAction: o.nextAction,
-    })),
-    total: output.totalPaths,
-    scannedAtUtc: output.scannedAtUtc,
-    passedCount: output.passedCount,
-    mode: config.mode,
-    note: config.mode === "READ_ONLY"
-      ? "只读模式 — 无真实行情快照，扫描结果为空"
-      : undefined,
-  });
+    const rejectSummary: Record<string, number> = {};
+    for (const opp of scan.opportunities) {
+      for (const r of opp.rejectReasons) {
+        rejectSummary[r.rule] = (rejectSummary[r.rule] ?? 0) + 1;
+      }
+    }
+
+    saveLatestScan({
+      opportunities: scan.opportunities,
+      totalPaths: scan.totalPaths,
+      passedCount: scan.passedCount,
+      rejectedCount: scan.rejectedCount,
+      rejectSummary,
+      errors: result.errors.map(e => ({ exchange: e.exchange, symbol: e.symbol, error: e.error })),
+      dataSource: "real_market",
+      scannedAtUtc: scan.scannedAtUtc,
+      durationMs,
+      symbolsScanned: 10,
+      exchangesScanned: 3,
+    });
+
+    return NextResponse.json({
+      opportunities: scan.opportunities,
+      total: scan.totalPaths,
+      passedCount: scan.passedCount,
+      rejectedCount: scan.rejectedCount,
+      rejectSummary,
+      errors: result.errors,
+      dataSource: "real_market",
+      scannedAtUtc: scan.scannedAtUtc,
+      durationMs,
+      mode: config.mode,
+    });
+  } catch (err) {
+    return NextResponse.json(
+      { error: "扫描失败", detail: String(err) },
+      { status: 500 },
+    );
+  }
 }

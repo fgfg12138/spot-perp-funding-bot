@@ -1,33 +1,28 @@
 import { NextResponse } from "next/server";
-import { refreshAndScan } from "@/lib/strategy-v121/market/marketRefreshService";
+import { getLatestScan } from "@/lib/strategy-v121/opportunity/opportunityStore";
 import { getConfig } from "@/lib/strategy-v121/config/strategyConfig";
 
-/** GET /api/v121/opportunities — real market scan */
+/** GET /api/v121/opportunities — 返回最近一次缓存扫描结果，不触发交易所 API */
 export async function GET() {
-  try {
-    const config = getConfig();
-    const result = await refreshAndScan({
-      plannedNotional: config.plannedNotional,
-      makerRate: config.makerRate,
-      takerRate: config.takerRate,
-      isTakerEntry: false,
-      systemHealthy: true,
-    });
+  const config = getConfig();
+  const latest = getLatestScan();
 
+  if (!latest) {
     return NextResponse.json({
-      opportunities: result.scanResult?.opportunities ?? [],
-      total: result.scanResult?.totalPaths ?? 0,
-      passedCount: result.scanResult?.passedCount ?? 0,
-      rejectedCount: result.scanResult?.rejectedCount ?? 0,
-      scannedAtUtc: result.scanResult?.scannedAtUtc ?? 0,
-      dataSource: result.errors.length === 0 ? "real_market" : "real_market_with_errors",
-      errors: result.errors.map(e => ({ exchange: e.exchange, symbol: e.symbol, error: e.error })),
+      opportunities: [],
+      total: 0,
+      passedCount: 0,
+      rejectedCount: 0,
+      rejectSummary: {},
+      scannedAtUtc: 0,
+      dataSource: "no_data",
       mode: config.mode,
+      message: "暂无扫描结果，请先启动 Worker 或点击手动扫描。",
     });
-  } catch (err) {
-    return NextResponse.json(
-      { error: "扫描失败", detail: String(err) },
-      { status: 500 },
-    );
   }
+
+  return NextResponse.json({
+    ...latest,
+    mode: config.mode,
+  });
 }

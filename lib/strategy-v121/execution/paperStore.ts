@@ -1,29 +1,55 @@
 import type { PaperExecution } from "./paperLifecycle";
+import { FileSystemRepository } from "../persistence/fileSystemRepository";
+import * as path from "node:path";
 
 /**
- * In-memory store for Paper executions.
+ * Paper execution store — JSONL 持久化。
  *
- * ⚠️ DEV: This store is reset on process restart.
- * TODO: Migrate to persistent storage (SQLite) before MAINNET_TINY.
+ * ⚠️ DEV-ONLY: 开发持久化，仅用于 PAPER，不允许用于 MAINNET_TINY。
+ * TODO: 迁移到 SQLite 后再用于 MAINNET_TINY。
  */
+const repo = new FileSystemRepository(path.join(process.cwd(), ".v121-data"));
+
 export class PaperExecutionStore {
-  private store = new Map<string, PaperExecution>();
+  private cache = new Map<string, PaperExecution>();
+
+  constructor() {
+    this.loadFromDisk();
+  }
+
+  private loadFromDisk(): void {
+    try {
+      const records = repo.queryAll("paper_executions") as any[];
+      for (const r of records) {
+        if (r.id) this.cache.set(r.id, r as PaperExecution);
+      }
+    } catch { /* ignore load errors */ }
+  }
+
+  private flushToDisk(): void {
+    repo.clear("paper_executions");
+    for (const ex of this.cache.values()) {
+      repo.save("paper_executions", ex as any);
+    }
+  }
 
   save(ex: PaperExecution): void {
-    this.store.set(ex.id, { ...ex });
+    this.cache.set(ex.id, { ...ex });
+    this.flushToDisk();
   }
 
   findById(id: string): PaperExecution | undefined {
-    const ex = this.store.get(id);
+    const ex = this.cache.get(id);
     return ex ? { ...ex } : undefined;
   }
 
   findAll(): PaperExecution[] {
-    return Array.from(this.store.values()).map(e => ({ ...e }));
+    return Array.from(this.cache.values()).map(e => ({ ...e }));
   }
 
   delete(id: string): void {
-    this.store.delete(id);
+    this.cache.delete(id);
+    this.flushToDisk();
   }
 }
 

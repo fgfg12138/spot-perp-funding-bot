@@ -21,6 +21,7 @@ export * from "./opportunity/hardFilters";
 export * from "./opportunity/scoring";
 export * from "./opportunity/cooldown";
 export * from "./opportunity/scanner";
+export * from "./opportunity/opportunityStore";
 
 export * from "./profitability/netProfit";
 

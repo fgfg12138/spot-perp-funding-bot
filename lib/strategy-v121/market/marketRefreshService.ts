@@ -10,6 +10,7 @@ import { OkxPublicAdapter } from "./adapters/okxPublicAdapter";
 import { HtxPublicAdapter } from "./adapters/htxPublicAdapter";
 import { buildMarketSnapshot } from "./adapters/types";
 import { scanOpportunities } from "../opportunity/scanner";
+import { saveLatestScan } from "../opportunity/opportunityStore";
 import { FileSystemRepository } from "../persistence/fileSystemRepository";
 import * as path from "node:path";
 
@@ -104,6 +105,27 @@ export async function refreshAndScan(input: {
       scannedAtUtc: now,
     } as any);
   }
+
+  // 缓存最新扫描结果
+  const scanRejectSummary: Record<string, number> = {};
+  for (const opp of scanResult.opportunities) {
+    for (const r of opp.rejectReasons) {
+      scanRejectSummary[r.rule] = (scanRejectSummary[r.rule] ?? 0) + 1;
+    }
+  }
+  saveLatestScan({
+    opportunities: scanResult.opportunities,
+    totalPaths: scanResult.totalPaths,
+    passedCount: scanResult.passedCount,
+    rejectedCount: scanResult.rejectedCount,
+    rejectSummary: scanRejectSummary,
+    errors: errors.map(e => ({ exchange: e.exchange, symbol: e.symbol, error: e.error })),
+    dataSource: "real_market",
+    scannedAtUtc: scanResult.scannedAtUtc,
+    durationMs: Date.now() - now,
+    symbolsScanned: symbols.length,
+    exchangesScanned: exchanges.length,
+  });
 
   return {
     spotSnapshots: spotMap, perpSnapshots: perpMap,

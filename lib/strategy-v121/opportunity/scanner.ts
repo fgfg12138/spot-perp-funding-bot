@@ -24,11 +24,13 @@ export interface ScannerOutput {
   passedCount: number;
   rejectedCount: number;
   dataSource: string;
+  rejectSummary: Record<string, number>;
 }
 
 export function scanOpportunities(input: ScannerInput): ScannerOutput {
   const now = Date.now();
   const opportunities: OpportunityRecord[] = [];
+  const rejectSummary: Record<string, number> = {};
   const paths = generateAllPaths();
 
   for (const path of paths) {
@@ -105,6 +107,9 @@ export function scanOpportunities(input: ScannerInput): ScannerOutput {
       nextAction: filterResult.nextAction,
     };
     opportunities.push(record);
+    for (const r of record.rejectReasons) {
+      rejectSummary[r.rule] = (rejectSummary[r.rule] ?? 0) + 1;
+    }
   }
 
   const passed = opportunities.filter(o => o.passed);
@@ -115,6 +120,7 @@ export function scanOpportunities(input: ScannerInput): ScannerOutput {
     passedCount: passed.length,
     rejectedCount: opportunities.length - passed.length,
     dataSource: "real_market",
+    rejectSummary,
   };
 }
 
