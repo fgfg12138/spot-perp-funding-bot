@@ -16,9 +16,10 @@ import { getKillSwitch, isActionAllowed } from "@/lib/strategy-v121/risk/killSwi
  */
 export async function GET(
   _request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const ex = paperStore.findById(params.id);
+  const { id } = await params;
+  const ex = paperStore.findById(id);
   if (!ex) {
     return NextResponse.json({ error: "未找到执行记录" }, { status: 404 });
   }
@@ -41,9 +42,10 @@ export async function GET(
  */
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const ex = paperStore.findById(params.id);
+  const { id } = await params;
+  const ex = paperStore.findById(id);
   if (!ex) {
     return NextResponse.json({ error: "未找到执行记录" }, { status: 404 });
   }
