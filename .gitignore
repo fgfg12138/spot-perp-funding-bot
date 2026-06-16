@@ -14,3 +14,5 @@ build/
 .reasonix/
 *.tsbuildinfo
 .env*.local (1).next/
+* (1).next/
+* (1).*/
