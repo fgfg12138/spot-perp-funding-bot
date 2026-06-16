@@ -12,3 +12,4 @@ build/
 .codegraph/
 .reasonix/
 *.tsbuildinfo
+.env*.local

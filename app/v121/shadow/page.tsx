@@ -14,7 +14,8 @@ export default function ShadowPage() {
   const doRefresh = async () => {
     setLoading(true);
     const r = await fetch("/api/v121/shadow/account");
-    setReport(await r.json());
+    const data = await r.json();
+    setReport(data);
     setLoading(false);
   };
 
@@ -41,7 +42,10 @@ export default function ShadowPage() {
                 {k.configured ? "已配置" : "未配置"}
               </div>
               <div className="text-xs text-gray-600 mt-1">
-                {k.configured ? "仅显示配置状态，不泄露 Key 内容" : "请在 .env.local 中配置"}
+                {report?.dataSources?.[k.exchange] === "real" ? "数据源：真实账户" :
+                 report?.dataSources?.[k.exchange] === "mock" ? "数据源：开发模拟" :
+                 report?.dataSources?.[k.exchange] === "not_configured" ? "未配置" :
+                 k.configured ? "仅显示配置状态" : "请在 .env.local 中配置"}
               </div>
             </div>
           ))}

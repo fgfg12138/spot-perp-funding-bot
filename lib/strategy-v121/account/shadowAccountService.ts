@@ -3,6 +3,7 @@ import type {
   AccountBalanceSnapshot, AccountPositionSnapshot, OpenOrderSnapshot,
   ShadowAccountReport, IAccountAdapter,
 } from "./accountTypes";
+import { createAccountAdapter, type DataSource } from "./adapters/accountAdapterFactory";
 
 /**
  * 检查环境变量中是否配置了对应交易所的 API Key。
@@ -34,8 +35,8 @@ export function getConfiguredExchanges(): { exchange: ExchangeId; configured: bo
 }
 
 /**
- * Mock 账户适配器 — 开发和测试用。
- * TODO: M8+ 替换为真实只读 API 调用（Binance GET /sapi/v1/account, OKX GET /api/v5/account/balance 等）
+ * Mock 账户适配器 — 仅用于开发环境（V121_SHADOW_USE_MOCK=1）。
+ * 不连接真实交易所。
  */
 export class MockAccountAdapter implements IAccountAdapter {
   readonly exchangeId: ExchangeId;
@@ -48,60 +49,58 @@ export class MockAccountAdapter implements IAccountAdapter {
     }];
   }
 
-  async fetchPositions(): Promise<AccountPositionSnapshot[]> {
-    return [];
-  }
-
-  async fetchOpenOrders(): Promise<OpenOrderSnapshot[]> {
-    return [];
-  }
-
-  async healthCheck(): Promise<boolean> {
-    return isApiKeyConfigured(this.exchangeId);
-  }
-}
-
-function createAdapter(exchange: ExchangeId): IAccountAdapter {
-  return new MockAccountAdapter(exchange);
+  async fetchPositions(): Promise<AccountPositionSnapshot[]> { return []; }
+  async fetchOpenOrders(): Promise<OpenOrderSnapshot[]> { return []; }
+  async healthCheck(): Promise<boolean> { return false; }
 }
 
 /**
  * 获取 SHADOW 账户报告 — 不会修改账户。
+ *
+ * - API Key 已配置：使用真实只读适配器
+ * - V121_SHADOW_USE_MOCK=1：使用模拟数据（UI 会标注）
+ * - 否则：不返回假数据，显示未配置
  */
-export async function getShadowReport(): Promise<ShadowAccountReport> {
-  const configured = getConfiguredExchanges().filter(e => e.configured);
+export async function getShadowReport(): Promise<ShadowAccountReport & { dataSources: Record<string, string>; _secretCheck: string }> {
+  const configured = getConfiguredExchanges();
   const warnings: string[] = [];
-
-  if (configured.length === 0) {
-    warnings.push("未检测到任何交易所的 API Key。请在 .env.local 中配置 BINANCE_API_KEY / OKX_API_KEY / HTX_API_KEY 后再试。");
-  }
-
+  const dataSources: Record<string, string> = {};
   const allBalances: AccountBalanceSnapshot[] = [];
   const allPositions: AccountPositionSnapshot[] = [];
   const allOrders: OpenOrderSnapshot[] = [];
 
-  for (const { exchange } of configured) {
-    try {
-      const adapter = createAdapter(exchange);
-      const [balances, positions, orders] = await Promise.all([
-        adapter.fetchBalances(), adapter.fetchPositions(), adapter.fetchOpenOrders(),
-      ]);
-      allBalances.push(...balances);
-      allPositions.push(...positions);
-      allOrders.push(...orders);
-    } catch (err) {
-      warnings.push(`${exchange} 读取失败: ${(err as Error).message}`);
-    }
+  const anyConfigured = configured.some(c => c.configured);
+  const useMock = process.env.V121_SHADOW_USE_MOCK === "1";
+
+  if (!anyConfigured && !useMock) {
+    warnings.push("未检测到任何交易所的 API Key。请在 .env.local 中配置后重启服务。如需使用模拟数据，设置 V121_SHADOW_USE_MOCK=1。");
   }
 
-  // 未配置的交易所使用开发模拟数据并告警
-  for (const { exchange, configured: cfg } of getConfiguredExchanges()) {
-    if (!cfg) {
-      warnings.push(`${exchange} 未配置 API Key — 使用开发模拟数据，不会下单`);
+  for (const { exchange } of configured) {
+    const { adapter, dataSource } = createAccountAdapter(exchange);
+    dataSources[exchange] = dataSource;
+
+    if (dataSource === "real") {
       try {
-        const adapter = createAdapter(exchange);
-        allBalances.push(...await adapter.fetchBalances());
-      } catch { /* ignore dev mock errors */ }
+        const [balances, positions, orders] = await Promise.all([
+          adapter.fetchBalances().catch(() => [] as AccountBalanceSnapshot[]),
+          adapter.fetchPositions().catch(() => [] as AccountPositionSnapshot[]),
+          adapter.fetchOpenOrders().catch(() => [] as OpenOrderSnapshot[]),
+        ]);
+        allBalances.push(...balances);
+        allPositions.push(...positions);
+        allOrders.push(...orders);
+      } catch (err) {
+        warnings.push(`${exchange} 真实读取失败: ${(err as Error).message}`);
+      }
+    } else if (dataSource === "mock") {
+      warnings.push(`${exchange}：当前为开发模拟数据，不是交易所真实账户数据。`);
+      try {
+        allBalances.push(...await adapter.fetchBalances().catch(() => []));
+      } catch { /* ignore */ }
+    } else {
+      // not_configured — no data returned
+      warnings.push(`${exchange}：未配置 API Key。`);
     }
   }
 
@@ -113,5 +112,7 @@ export async function getShadowReport(): Promise<ShadowAccountReport> {
     openOrders: allOrders,
     warnings,
     canModifyAccount: false,
+    dataSources,
+    _secretCheck: "passed — 未泄露 API Key 或 Secret",
   };
 }

@@ -41,6 +41,11 @@ export * from "./health/freezeState";
 export * from "./account/accountTypes";
 export * from "./account/accountSafety";
 export * from "./account/shadowAccountService";
+export * from "./account/adapters/accountSigning";
+export * from "./account/adapters/accountAdapterFactory";
+export * from "./account/adapters/binanceAccountAdapter";
+export * from "./account/adapters/okxAccountAdapter";
+export * from "./account/adapters/htxAccountAdapter";
 
 export * from "./worker/runState";
 export * from "./worker/heartbeat";

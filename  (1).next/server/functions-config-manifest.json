@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "functions": {
+    "/api/adl-monitor/mock-refresh": {},
+    "/api/basis/opportunities": {},
+    "/api/adl-settings": {},
+    "/api/adl-monitor": {},
+    "/api/debug/exchange-compare": {},
+    "/api/history/funding": {},
+    "/api/notifications/evaluate": {},
+    "/api/history/opportunities": {},
+    "/api/opportunities": {},
+    "/api/notifications": {},
+    "/api/research/alpha/[id]": {},
+    "/api/research/factors": {},
+    "/api/research/alpha": {},
+    "/api/research/heatmap": {},
+    "/api/research/opportunities": {},
+    "/api/risk-rules": {},
+    "/api/simulation/account": {},
+    "/api/risk-rules/[id]": {},
+    "/api/simulation/history": {},
+    "/api/simulation/run": {},
+    "/api/strategies": {},
+    "/api/strategies/[id]": {},
+    "/api/strategies/[id]/clone": {}
+  }
+}
