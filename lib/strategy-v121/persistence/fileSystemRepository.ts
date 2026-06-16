@@ -1,14 +1,17 @@
 /**
- * FileSystemRepository — JSONL-based persistence for v121.
+ * FileSystemRepository — JSONL-based development persistence.
  *
- * Writes each record as a single JSON line to a file.
- * Supports the 7 core tables.
+ * ⚠️ DEV-ONLY: This is not production-grade persistence.
+ * TODO: Replace with better-sqlite3 or PostgreSQL via
+ *       the IPersistenceRepository interface in repositoryTypes.ts
+ *       before entering MAINNET_TINY phase.
  */
 
 import * as fs from "node:fs";
 import * as path from "node:path";
+import type { IPersistenceRepository } from "./repositoryTypes";
 
-export class FileSystemRepository {
+export class FileSystemRepository implements IPersistenceRepository {
   private basePath: string;
 
   constructor(basePath: string) {

@@ -27,6 +27,7 @@ export * from "./execution/batchPlan";
 export * from "./execution/deviation";
 export * from "./execution/shortLegRepair";
 export * from "./execution/paperLifecycle";
+export * from "./execution/paperStore";
 
 export * from "./position/exitRules";
 export * from "./position/monitor";
@@ -37,10 +38,16 @@ export * from "./risk/killSwitch";
 
 export * from "./health/freezeState";
 
+export * from "./worker/runState";
+export * from "./worker/heartbeat";
+export * from "./worker/scheduler";
+export * from "./worker/worker";
+
 export * from "./time/utc";
 
 export * from "./persistence/schema";
 export * from "./persistence/repositories";
+export * from "./persistence/repositoryTypes";
 export * from "./persistence/fileSystemRepository";
 
 export * from "./config/strategyConfig";
