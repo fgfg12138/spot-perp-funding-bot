@@ -106,7 +106,7 @@ export class HtxAccountAdapter implements IAccountAdapter {
 
   async healthCheck(): Promise<boolean> {
     try {
-      const res = await fetch(`${SPOT_BASE}/v2/status`);
+      const res = await fetch(`${SPOT_BASE}/v1/common/timestamp`);
       return res.ok;
     } catch {
       return false;

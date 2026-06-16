@@ -21,7 +21,7 @@ export class HtxPublicAdapter implements IPublicAdapter {
 
   async healthCheck(): Promise<boolean> {
     try {
-      await this.fetchJson(`${BASE_URL}/v2/status`);
+      await this.fetchJson(`${BASE_URL}/v1/common/timestamp`);
       return true;
     } catch {
       return false;
