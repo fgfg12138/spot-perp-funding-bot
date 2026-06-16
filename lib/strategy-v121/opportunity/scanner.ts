@@ -22,6 +22,8 @@ export interface ScannerOutput {
   scannedAtUtc: number;
   totalPaths: number;
   passedCount: number;
+  rejectedCount: number;
+  dataSource: string;
 }
 
 export function scanOpportunities(input: ScannerInput): ScannerOutput {
@@ -111,6 +113,8 @@ export function scanOpportunities(input: ScannerInput): ScannerOutput {
     scannedAtUtc: now,
     totalPaths: paths.length,
     passedCount: passed.length,
+    rejectedCount: opportunities.length - passed.length,
+    dataSource: "real_market",
   };
 }
 

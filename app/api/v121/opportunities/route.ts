@@ -1,42 +1,33 @@
 import { NextResponse } from "next/server";
-import { scanOpportunities } from "@/lib/strategy-v121/opportunity/scanner";
+import { refreshAndScan } from "@/lib/strategy-v121/market/marketRefreshService";
 import { getConfig } from "@/lib/strategy-v121/config/strategyConfig";
-import type { MarketSnapshot } from "@/lib/strategy-v121/domain/types";
 
-/**
- * GET /api/v121/opportunities
- *
- * Scans all exchange snapshots and returns opportunity pool.
- * In READ_ONLY mode, returns empty unless market data is available.
- */
+/** GET /api/v121/opportunities — real market scan */
 export async function GET() {
   try {
     const config = getConfig();
-
-    // In READ_ONLY/PAPER, this will be empty unless real data is provided
-    // For now, return empty but with proper structure
-    const output = scanOpportunities({
-      spotSnapshots: new Map<string, MarketSnapshot>(),
-      perpSnapshots: new Map<string, MarketSnapshot>(),
-      systemHealthy: true,
-      activeCooldowns: [],
+    const result = await refreshAndScan({
       plannedNotional: config.plannedNotional,
       makerRate: config.makerRate,
       takerRate: config.takerRate,
       isTakerEntry: false,
+      systemHealthy: true,
     });
 
     return NextResponse.json({
-      opportunities: output.opportunities,
-      total: output.totalPaths,
-      scannedAtUtc: output.scannedAtUtc,
-      passedCount: output.passedCount,
+      opportunities: result.scanResult?.opportunities ?? [],
+      total: result.scanResult?.totalPaths ?? 0,
+      passedCount: result.scanResult?.passedCount ?? 0,
+      rejectedCount: result.scanResult?.rejectedCount ?? 0,
+      scannedAtUtc: result.scanResult?.scannedAtUtc ?? 0,
+      dataSource: result.errors.length === 0 ? "real_market" : "real_market_with_errors",
+      errors: result.errors.map(e => ({ exchange: e.exchange, symbol: e.symbol, error: e.error })),
       mode: config.mode,
     });
   } catch (err) {
     return NextResponse.json(
       { error: "扫描失败", detail: String(err) },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

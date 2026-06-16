@@ -5,6 +5,7 @@ import { getConfig } from "../config/strategyConfig";
 import { getKillSwitch, isActionAllowed } from "../risk/killSwitch";
 import { scanOpportunities } from "../opportunity/scanner";
 import { paperStore } from "../execution/paperStore";
+import { refreshAndScan } from "../market/marketRefreshService";
 import { FileSystemRepository } from "../persistence/fileSystemRepository";
 import type { MarketSnapshot } from "../domain/types";
 import * as path from "node:path";
@@ -65,31 +66,23 @@ export class V121Worker {
     }
 
     try {
-      // 2. 健康检查
-      const healthy = true; // TODO M8: integrate real health check
-
-      // 3. 刷新行情快照 (READ_ONLY/PAPER — 空快照，Worker 将来接 adapter)
-      const spotSnapshots = new Map<string, MarketSnapshot>();
-      const perpSnapshots = new Map<string, MarketSnapshot>();
-
-      // 4. 扫描机会
-      const scanResult = scanOpportunities({
-        spotSnapshots,
-        perpSnapshots,
-        systemHealthy: healthy,
-        activeCooldowns: [],
+      // 2. 刷新真实行情 + 扫描机会 + 持久化
+      const refreshResult = await refreshAndScan({
         plannedNotional: config.plannedNotional,
         makerRate: config.makerRate,
         takerRate: config.takerRate,
         isTakerEntry: false,
+        systemHealthy: true,
       });
 
-      // 5. 持久化机会记录
-      for (const opp of scanResult.opportunities) {
-        repo.save("opportunity_records", opp as unknown as Record<string, unknown>);
+      // 3. 记录行情错误（不中断 Worker）
+      for (const err of refreshResult.errors) {
+        console.warn(`[worker] ${err.exchange}/${err.symbol}: ${err.error}`);
       }
 
-      // 6. PAPER 模式 — 推进 Paper 生命周期
+      // 4. 机会记录已在 refreshAndScan 中持久化到 opportunity_records
+
+      // 5. PAPER 模式 — 推进 Paper 生命周期
       if (mode === "PAPER" && !this.dryRun) {
         const executions = paperStore.findAll();
         for (const ex of executions) {

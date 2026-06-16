@@ -50,30 +50,46 @@ export default function OpportunitiesPage() {
               <th className="text-center py-2">等级</th>
               <th className="text-center py-2">通过</th>
               <th className="text-left py-2">淘汰原因</th>
+              <th className="text-left py-2">风险标签</th>
             </tr>
           </thead>
           <tbody>
             {!data?.opportunities?.length ? (
-              <tr><td colSpan={9} className="py-8 text-center text-gray-500">暂无机会 — 触发扫描获取数据</td></tr>
+              <tr><td colSpan={11} className="py-8 text-center text-gray-500">
+                暂无通过筛选的机会。<br/>
+                可能原因：资金费不足、深度不足、价差不合格、数据过期或 Worker 尚未运行。<br/>
+                {data?.errors?.length > 0 && (
+                  <span className="text-xs text-red-400">
+                    部分行情读取失败: {data.errors.map((e: any) => `${e.exchange}/${e.symbol}`).join(", ")}
+                  </span>
+                )}
+              </td></tr>
             ) : (
               data.opportunities.map((o: any) => (
                 <tr key={o.id} className="border-b border-gray-800">
-                  <td className="py-2">{o.symbol}</td>
-                  <td className="py-2">{o.spotExchange}</td>
-                  <td className="py-2">{o.perpExchange}</td>
+                  <td className="py-2">{o.path?.symbol ?? o.symbol ?? "—"}</td>
+                  <td className="py-2">{o.path?.spotExchange ?? o.spotExchange ?? "—"}</td>
+                  <td className="py-2">{o.path?.perpExchange ?? o.perpExchange ?? "—"}</td>
                   <td className="py-2 text-right">{(o.funding8h * 100).toFixed(3)}%</td>
-                  <td className="py-2 text-right">{(o.entryBasis * 100).toFixed(3)}%</td>
+                  <td className="py-2 text-right">{(o.entryExecutableBasis * 100).toFixed(3)}%</td>
                   <td className="py-2 text-right">{o.score}</td>
                   <td className="py-2 text-center">
                     <span className={`px-2 py-0.5 text-xs font-bold ${o.level === "S" ? "text-yellow-300 bg-yellow-900/50" : o.level === "A" ? "text-green-300 bg-green-900/50" : o.level === "B" ? "text-blue-300 bg-blue-900/50" : "text-gray-400 bg-gray-800"}`}>{o.level}</span>
                   </td>
                   <td className="py-2 text-center">{o.passed ? "✅" : "❌"}</td>
-                  <td className="py-2 text-xs text-gray-500">{o.rejectReasons?.map((r: any) => r.rule).join(", ")}</td>
+                  <td className="py-2 text-xs text-gray-500">{o.rejectReasons?.map((r: any) => r.rule).join(", ") ?? "—"}</td>
+                  <td className="py-2 text-xs text-gray-500">{o.warnings?.slice(0, 2).join(", ") ?? "—"}</td>
                 </tr>
               ))
             )}
           </tbody>
         </table>
+        {data && (
+          <div className="text-xs text-gray-600 mt-2 space-y-1">
+            <div>数据源: {data.dataSource ?? "—"} | 扫描时间: {data.scannedAtUtc ? new Date(data.scannedAtUtc).toLocaleString("zh-CN") : "—"}</div>
+            <div>总路径: {data.total} | 通过: {data.passedCount} | 淘汰: {data.rejectedCount}</div>
+          </div>
+        )}
       </div>
     </div>
   );

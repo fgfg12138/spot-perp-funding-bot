@@ -11,6 +11,7 @@ export * from "./market/symbolMap";
 export * from "./market/contractSpec";
 export * from "./market/fundingNormalize";
 export * from "./market/dataFreshness";
+export * from "./market/marketRefreshService";
 export * from "./market/adapters/types";
 export * from "./market/adapters/binancePublicAdapter";
 export * from "./market/adapters/okxPublicAdapter";

@@ -6,11 +6,13 @@ export default function DashboardPage() {
   const [health, setHealth] = useState<any>(null);
   const [worker, setWorker] = useState<any>(null);
   const [risk, setRisk] = useState<any>(null);
+  const [opps, setOpps] = useState<any>(null);
 
   useEffect(() => {
     fetch("/api/v121/health").then(r => r.json()).then(setHealth).catch(() => {});
     fetch("/api/v121/worker").then(r => r.json()).then(setWorker).catch(() => {});
     fetch("/api/v121/risk").then(r => r.json()).then(setRisk).catch(() => {});
+    fetch("/api/v121/opportunities").then(r => r.json()).then(setOpps).catch(() => {});
   }, []);
 
   if (!health) return <div className="text-gray-500 p-8">加载中...</div>;
@@ -27,6 +29,9 @@ export default function DashboardPage() {
         <StatusCard label="Worker 周期" value={String(worker?.cycleCount ?? 0)} color="blue" />
         <StatusCard label="冻结执行数" value={String(risk?.frozenCount ?? 0)} color={risk?.frozenCount > 0 ? "red" : "green"} />
         <StatusCard label="偏差超限" value={String(risk?.deviationCount ?? 0)} color={risk?.deviationCount > 0 ? "yellow" : "green"} />
+        <StatusCard label="数据源" value={opps?.dataSource === "real_market" ? "实时行情" : opps?.dataSource ?? "—"} color={opps?.dataSource === "real_market" ? "green" : "yellow"} />
+        <StatusCard label="扫描时间" value={opps?.scannedAtUtc ? new Date(opps.scannedAtUtc).toLocaleTimeString("zh-CN") : "—"} color="blue" />
+        <StatusCard label="机会总数" value={`${opps?.passedCount ?? 0}/${opps?.total ?? 0}`} color="cyan" />
       </div>
       <div className="mt-4 text-xs text-gray-600">
         数据源: API 实时 | 持久化: {risk?.canTrade ? "正常" : "受限"}
