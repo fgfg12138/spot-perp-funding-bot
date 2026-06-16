@@ -12,6 +12,7 @@ import type {
   AccountPositionSnapshot, OpenOrderSnapshot,
 } from "../accountTypes";
 import { htxSign, utcTimestampMs } from "./accountSigning";
+import { safeFetch } from "./safeFetch";
 
 const SPOT_BASE = "https://api.huobi.pro";
 const SWAP_BASE = "https://api.hbdm.com";
@@ -20,7 +21,8 @@ export class HtxAccountAdapter implements IAccountAdapter {
   readonly exchangeId: ExchangeId = "htx";
 
   private async signedGet(base: string, path: string, extraParams: Record<string, string> = {}): Promise<any> {
-    const ts = utcTimestampMs().toString();
+    const now = new Date();
+    const ts = now.toISOString().replace(/\.\d{3}Z$/, "");
     const params = { ...extraParams, Timestamp: ts };
     const host = new URL(base).host;
     const signed = htxSign("GET", host, path, params);
@@ -28,10 +30,10 @@ export class HtxAccountAdapter implements IAccountAdapter {
       .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
       .join("&");
     const url = `${base}${path}?${qs}`;
-    const res = await fetch(url);
-    const body = await res.json();
-    if (body.status !== "ok") throw new Error(`HTX API: ${body["err-msg"] ?? JSON.stringify(body)}`);
-    return body;
+    const result = await safeFetch(url);
+    if (!result.ok) throw new Error(result.errorMessage ?? "HTX 请求失败");
+    if (result.body?.status !== "ok") throw new Error(`HTX API: ${result.body?.["err-msg"] ?? JSON.stringify(result.body)}`);
+    return result.body;
   }
 
   private async getAccountId(): Promise<string | null> {

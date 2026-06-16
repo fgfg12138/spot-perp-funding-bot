@@ -41,6 +41,7 @@ export * from "./health/freezeState";
 export * from "./account/accountTypes";
 export * from "./account/accountSafety";
 export * from "./account/shadowAccountService";
+export * from "./account/shadowDiagnostics";
 export * from "./account/adapters/accountSigning";
 export * from "./account/adapters/accountAdapterFactory";
 export * from "./account/adapters/binanceAccountAdapter";

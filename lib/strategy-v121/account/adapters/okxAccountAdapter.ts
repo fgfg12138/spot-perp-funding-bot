@@ -11,6 +11,7 @@ import type {
   AccountPositionSnapshot, OpenOrderSnapshot,
 } from "../accountTypes";
 import { okxSign } from "./accountSigning";
+import { safeFetch } from "./safeFetch";
 
 const BASE = "https://www.okx.com";
 
@@ -20,7 +21,7 @@ export class OkxAccountAdapter implements IAccountAdapter {
   private async signedGet(path: string): Promise<any> {
     const ts = new Date().toISOString();
     const { apiKey, passphrase, sign } = okxSign(ts, "GET", path, "");
-    const res = await fetch(`${BASE}${path}`, {
+    const result = await safeFetch(`${BASE}${path}`, {
       headers: {
         "OK-ACCESS-KEY": apiKey,
         "OK-ACCESS-SIGN": sign,
@@ -29,9 +30,11 @@ export class OkxAccountAdapter implements IAccountAdapter {
         "Content-Type": "application/json",
       },
     });
-    const body = await res.json();
-    if (body.code !== "0") throw new Error(`OKX API ${body.code}: ${body.msg ?? "未知错误"}`);
-    return body.data;
+    if (!result.ok) throw new Error(result.errorMessage ?? "OKX 请求失败");
+    if (result.body?.code !== "0") {
+      throw new Error(`OKX API ${result.body?.code}: ${result.body?.msg ?? "未知错误"}`);
+    }
+    return result.body.data;
   }
 
   async fetchBalances(): Promise<AccountBalanceSnapshot[]> {

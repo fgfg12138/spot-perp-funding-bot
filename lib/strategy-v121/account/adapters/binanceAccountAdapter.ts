@@ -11,6 +11,7 @@ import type {
   AccountPositionSnapshot, OpenOrderSnapshot,
 } from "../accountTypes";
 import { binanceSign, utcTimestampMs } from "./accountSigning";
+import { safeFetch } from "./safeFetch";
 
 const SPOT = "https://api.binance.com";
 const FUTURES = "https://fapi.binance.com";
@@ -19,12 +20,12 @@ export class BinanceAccountAdapter implements IAccountAdapter {
   readonly exchangeId: ExchangeId = "binance";
 
   private async signedGet(base: string, path: string): Promise<any> {
-    const query = `timestamp=${utcTimestampMs()}`;
+    const query = `timestamp=${utcTimestampMs()}&recvWindow=5000`;
     const { signature, apiKey } = binanceSign(query);
     const url = `${base}${path}?${query}&signature=${signature}`;
-    const res = await fetch(url, { headers: { "X-MBX-APIKEY": apiKey } });
-    if (!res.ok) throw new Error(`Binance HTTP ${res.status}: ${await res.text().catch(() => "")}`);
-    return res.json();
+    const result = await safeFetch(url, { headers: { "X-MBX-APIKEY": apiKey } });
+    if (!result.ok) throw new Error(result.errorMessage ?? "Binance 请求失败");
+    return result.body;
   }
 
   async fetchBalances(): Promise<AccountBalanceSnapshot[]> {

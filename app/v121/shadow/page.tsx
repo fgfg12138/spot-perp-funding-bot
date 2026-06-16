@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 export default function ShadowPage() {
   const [status, setStatus] = useState<any>(null);
   const [report, setReport] = useState<any>(null);
+  const [diag, setDiag] = useState<any>(null);
+  const [diagLoading, setDiagLoading] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -17,6 +19,13 @@ export default function ShadowPage() {
     const data = await r.json();
     setReport(data);
     setLoading(false);
+  };
+
+  const runDiag = async () => {
+    setDiagLoading(true);
+    const r = await fetch("/api/v121/shadow/diagnostics");
+    setDiag(await r.json());
+    setDiagLoading(false);
   };
 
   return (
@@ -53,13 +62,16 @@ export default function ShadowPage() {
       </section>
 
       {/* 同步按钮 */}
-      <button
-        onClick={doRefresh}
-        disabled={loading}
-        className="border border-cyan-400/60 bg-cyan-400/15 text-cyan-100 px-4 py-2 text-sm mb-4 disabled:opacity-50"
-      >
-        {loading ? "同步中..." : "同步账户数据"}
-      </button>
+      <div className="flex gap-2 mb-4">
+        <button onClick={doRefresh} disabled={loading}
+          className="border border-cyan-400/60 bg-cyan-400/15 text-cyan-100 px-4 py-2 text-sm disabled:opacity-50">
+          {loading ? "同步中..." : "同步账户数据"}
+        </button>
+        <button onClick={runDiag} disabled={diagLoading}
+          className="border border-amber-400/60 bg-amber-400/15 text-amber-100 px-4 py-2 text-sm disabled:opacity-50">
+          {diagLoading ? "诊断中..." : "运行只读诊断"}
+        </button>
+      </div>
 
       {/* 余额 */}
       {report?.balances?.length > 0 && (
@@ -172,6 +184,38 @@ export default function ShadowPage() {
           {report.warnings.map((w: string, i: number) => (
             <p key={i} className="text-xs text-red-300">{w}</p>
           ))}
+        </section>
+      )}
+
+      {/* 诊断结果 */}
+      {diag?.diagnostics?.length > 0 && (
+        <section className="bg-gray-900 rounded-lg border border-gray-800 p-4 mb-4">
+          <h3 className="text-lg font-semibold mb-3 text-amber-400">私有接口诊断</h3>
+          <div className="text-xs text-gray-500 mb-2">
+            Secret 泄露检查: {diag.secretExposureCheck === "passed" ? "✅ 通过" : "❌ 失败"}
+          </div>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-gray-500 border-b border-gray-800">
+                <th className="text-left py-2">交易所</th>
+                <th className="text-left py-2">操作</th>
+                <th className="text-center py-2">状态</th>
+                <th className="text-left py-2">类型</th>
+                <th className="text-left py-2">说明</th>
+              </tr>
+            </thead>
+            <tbody>
+              {diag.diagnostics.map((d: any, i: number) => (
+                <tr key={i} className="border-b border-gray-800">
+                  <td className="py-1 font-semibold">{d.exchange}</td>
+                  <td className="py-1 text-xs">{d.operation}</td>
+                  <td className="py-1 text-center">{d.success ? "✅" : "❌"}</td>
+                  <td className="py-1 text-xs text-gray-400">{d.errorType ?? "—"}</td>
+                  <td className="py-1 text-xs text-gray-400">{d.chineseMessage}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </section>
       )}
 

@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "v121:worker": "npx tsx scripts/v121-worker.ts",
     "v121:worker:dry": "V121_MODE=PAPER V121_DRY_RUN=1 npx tsx scripts/v121-worker.ts",
-    "v121:smoke": "npx tsx scripts/v121-smoke-market.ts"
+    "v121:smoke": "npx tsx scripts/v121-smoke-market.ts",
+    "v121:shadow:diag": "npx tsx scripts/v121-shadow-diagnostics.ts"
   },
   "dependencies": {
     "@tanstack/react-table": "^8.21.3",
