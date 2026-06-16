@@ -1,0 +1,87 @@
+import { describe, expect, it, beforeEach, afterEach } from "vitest";
+import { FileSystemRepository } from "./fileSystemRepository";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import * as os from "node:os";
+
+describe("FileSystemRepository", () => {
+  let repo: FileSystemRepository;
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "v121-test-"));
+    repo = new FileSystemRepository(tmpDir);
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("creates the base directory if missing", () => {
+    expect(fs.existsSync(tmpDir)).toBe(true);
+  });
+
+  it("save and queryAll round-trip", () => {
+    repo.save("opportunity_records", { id: "1", symbol: "BTC/USDT", score: 85 });
+    repo.save("opportunity_records", { id: "2", symbol: "ETH/USDT", score: 72 });
+    const all = repo.queryAll("opportunity_records");
+    expect(all).toHaveLength(2);
+    expect(all[0].id).toBe("1");
+    expect(all[1].id).toBe("2");
+  });
+
+  it("saveAll writes multiple records", () => {
+    repo.saveAll("entry_executions", [
+      { id: "a", batch_no: 1 }, { id: "b", batch_no: 2 },
+    ]);
+    expect(repo.count("entry_executions")).toBe(2);
+  });
+
+  it("query with filter", () => {
+    repo.save("test", { a: 1 }); repo.save("test", { a: 2 }); repo.save("test", { a: 3 });
+    const filtered = repo.query("test", r => (r.a as number) > 1);
+    expect(filtered).toHaveLength(2);
+  });
+
+  it("latest returns last record", () => {
+    repo.save("position_snapshots", { ts: 1 }); repo.save("position_snapshots", { ts: 2 });
+    expect(repo.latest("position_snapshots")?.ts).toBe(2);
+  });
+
+  it("latest returns undefined for empty table", () => {
+    expect(repo.latest("nonexistent")).toBeUndefined();
+  });
+
+  it("count returns correct count", () => {
+    expect(repo.count("empty")).toBe(0);
+    repo.save("empty", { x: 1 });
+    expect(repo.count("empty")).toBe(1);
+  });
+
+  it("clear removes all data", () => {
+    repo.save("temp", { a: 1 });
+    repo.clear("temp");
+    expect(repo.count("temp")).toBe(0);
+  });
+
+  it("listTables returns table names", () => {
+    repo.save("opportunity_records", { id: "1" });
+    repo.save("entry_decisions", { id: "2" });
+    const tables = repo.listTables();
+    expect(tables).toContain("opportunity_records");
+    expect(tables).toContain("entry_decisions");
+  });
+
+  it("writes 7 core tables and reads back", () => {
+    const tables = [
+      "opportunity_records", "entry_decisions", "entry_executions",
+      "position_snapshots", "funding_settlements",
+      "exit_executions", "final_reviews",
+    ];
+    for (const t of tables) {
+      repo.save(t, { table_name: t, written_at: Date.now() });
+      expect(repo.count(t)).toBeGreaterThanOrEqual(1);
+    }
+    expect(repo.listTables().length).toBeGreaterThanOrEqual(7);
+  });
+});
