@@ -22,6 +22,7 @@ export * from "./opportunity/scoring";
 export * from "./opportunity/cooldown";
 export * from "./opportunity/scanner";
 export * from "./opportunity/opportunityStore";
+export * from "./opportunity/opportunityWatcher";
 
 export * from "./profitability/netProfit";
 
