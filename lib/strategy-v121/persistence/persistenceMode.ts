@@ -8,8 +8,16 @@
 export type PersistenceMode = "jsonl-dev-only" | "sqlite-ready" | "sqlite-active";
 
 let currentMode: PersistenceMode = "jsonl-dev-only";
+let initialized = false;
 
 export function getPersistenceMode(): PersistenceMode {
+  if (!initialized) {
+    initialized = true;
+    const env = process.env.V121_PERSISTENCE_MODE;
+    if (env === "sqlite-active" || env === "sqlite-ready") {
+      currentMode = env;
+    }
+  }
   return currentMode;
 }
 

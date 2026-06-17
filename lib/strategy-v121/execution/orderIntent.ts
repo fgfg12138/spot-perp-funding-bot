@@ -4,10 +4,9 @@
  */
 import type { ExchangeId } from "../domain/types";
 import { checkMainnetTinyGate, validateOrderIntent } from "../mainnetTiny/mainnetTinyGate";
-import { FileSystemRepository } from "../persistence/fileSystemRepository";
-import * as path from "node:path";
+import { getRepository } from "../persistence/repositoryFactory";
 
-const repo = new FileSystemRepository(path.join(process.cwd(), ".v121-data"));
+const repo = getRepository();
 
 export interface OrderIntent {
   intentId: string;
@@ -23,6 +22,9 @@ export interface OrderIntent {
   gateAllowed: boolean;
   blockedReasons: string[];
   requiresManualConfirm: boolean;
+  manualConfirmPassed: boolean;
+  dryRun: boolean;
+  realOrderExecutionEnabled: boolean;
   dataSource: string;
 }
 
@@ -33,8 +35,12 @@ export function createOrderIntent(params: {
   plannedNotionalUsdt: number;
   batchNo: number;
   reason?: string;
+  manualConfirmText?: string;
 }): OrderIntent {
   const gate = checkMainnetTinyGate();
+  const realOrderEnabled = process.env.V121_REAL_ORDER_EXECUTION_ENABLED === "true";
+  const dryRun = process.env.V121_MAINNET_TINY_DRY_RUN === "true" || !realOrderEnabled;
+  const confirmOk = params.manualConfirmText === "I_UNDERSTAND_MAINNET_TINY_10U";
   const limitCheck = validateOrderIntent({
     symbol: params.symbol,
     spotExchange: params.spotExchange,
@@ -42,11 +48,14 @@ export function createOrderIntent(params: {
     notionalUsdt: params.plannedNotionalUsdt,
     totalExposureUsdt: params.plannedNotionalUsdt,
   });
-  const blockedReasons = [
+
+  const blockedReasons: string[] = [
     ...gate.missing.map(m => `环境门: ${m}`),
     ...gate.warnings.map(w => `警告: ${w}`),
     ...limitCheck.blockedReasons,
   ];
+  if (!confirmOk) blockedReasons.push("人工确认未通过（需输入 I_UNDERSTAND_MAINNET_TINY_10U）");
+  if (!realOrderEnabled) blockedReasons.push("V121_REAL_ORDER_EXECUTION_ENABLED 未开启");
 
   const intent: OrderIntent = {
     intentId: `intent-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -59,9 +68,12 @@ export function createOrderIntent(params: {
     batchNo: params.batchNo,
     reason: params.reason ?? "手工创建",
     createdAtUtc: Date.now(),
-    gateAllowed: gate.allowed && limitCheck.allowed,
+    gateAllowed: gate.allowed && limitCheck.allowed && confirmOk && realOrderEnabled,
     blockedReasons,
     requiresManualConfirm: true,
+    manualConfirmPassed: confirmOk,
+    dryRun,
+    realOrderExecutionEnabled: realOrderEnabled,
     dataSource: "order_intent",
   };
 

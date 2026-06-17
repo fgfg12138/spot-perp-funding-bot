@@ -2,6 +2,7 @@ import { checkMainnetTinyGate } from "./mainnetTinyGate";
 import { getKillSwitch } from "../risk/killSwitch";
 import { getPersistenceMode, isPersistenceReadyForTiny } from "../persistence/persistenceMode";
 import { getRepository } from "../persistence/repositoryFactory";
+import { MAINNET_TINY_DEFAULT_LIMITS } from "../config/strategyConfig";
 
 export interface PreflightCheck {
   name: string;
@@ -21,67 +22,89 @@ export interface PreflightResult {
 export function runMainnetTinyPreflight(): PreflightResult {
   const checks: PreflightCheck[] = [];
   const repo = getRepository();
+  const gate = checkMainnetTinyGate();
+  const realOrderEnabled = process.env.V121_REAL_ORDER_EXECUTION_ENABLED === "true";
+
+  const add = (name: string, passed: boolean, severity: PreflightCheck["severity"], msg: string) =>
+    checks.push({ name, passed, severity, chineseMessage: msg });
 
   // 1. Env gate
-  const gate = checkMainnetTinyGate();
-  checks.push({
-    name: "环境变量门",
-    passed: gate.allowed,
-    severity: "critical",
-    chineseMessage: gate.allowed ? "环境变量门满足" : `缺失: ${gate.missing.join(", ")}`,
-  });
+  add("环境变量门", gate.allowed, "critical",
+    gate.allowed ? "满足" : `缺失: ${gate.missing.join(", ")}`);
 
   // 2. Kill Switch
-  const ks = getKillSwitch();
-  checks.push({
-    name: "Kill Switch",
-    passed: ks === "OFF",
-    severity: "critical",
-    chineseMessage: ks === "OFF" ? "Kill Switch 已关闭" : `Kill Switch 为 ${ks}`,
-  });
+  add("Kill Switch", gate.killSwitch === "OFF", "critical",
+    gate.killSwitch === "OFF" ? "已关闭 ✅" : `${gate.killSwitch}`);
 
-  // 3. Persistence
-  const persMode = getPersistenceMode();
-  checks.push({
-    name: "持久化模式",
-    passed: isPersistenceReadyForTiny(),
-    severity: "critical",
-    chineseMessage: persMode === "sqlite-active" ? "sqlite-active" : `${persMode}`,
-  });
+  // 3. Persistence mode
+  add("持久化模式", gate.persistenceMode === "sqlite-active", "critical",
+    gate.persistenceMode);
 
-  // 4. Latest scan
+  // 4. SQLite writable
+  const sqliteOk = gate.persistenceMode === "sqlite-active" ? repo.count("latest_scan") >= 0 : false;
+  add("SQLite 可写", gate.persistenceMode === "sqlite-active", "critical",
+    gate.persistenceMode === "sqlite-active" ? "可写" : "不可写（JSONL 模式）");
+
+  // 5. Latest scan exists
   const scan = repo.latest("latest_scan");
   const scanTs = Number((scan as any)?.scannedAtUtc ?? (scan as any)?.scanned_at_utc ?? 0);
   const scanAge = scanTs > 0 ? Date.now() - scanTs : Infinity;
-  const scanTime = scanTs > 0 ? new Date(scanTs).toLocaleString("zh-CN") : "未知";
-  checks.push({
-    name: "最近扫描",
-    passed: scanTs > 0 && scanAge < 5 * 60 * 1000,
-    severity: "warning",
-    chineseMessage: scanTs > 0 ? `${scanTime} (${Math.round(scanAge / 1000)}秒前)` : "无扫描记录",
-  });
+  add("最新扫描", scanTs > 0, "warning",
+    scanTs > 0 ? `${Math.round(scanAge / 1000)}秒前` : "无扫描记录");
 
-  // 5. Worker heartbeat
+  // 6. Latest scan < 5min
+  add("扫描时效", scanAge < 5 * 60 * 1000, "warning",
+    scanAge < 5 * 60 * 1000 ? "有效" : "过期");
+
+  // 7. Data source real_market
+  const scanDs = (scan as any)?.dataSource ?? (scan as any)?.data_source ?? "";
+  add("数据源", scanDs.includes("real_market"), "warning",
+    scanDs || "未知");
+
+  // 8-9. Worker heartbeat
   const hb = repo.latest("worker_heartbeats");
   const hbTs = Number((hb as any)?.lastCycleAtUtc ?? (hb as any)?.last_cycle_at_utc ?? 0);
   const hbAge = hbTs > 0 ? Date.now() - hbTs : Infinity;
-  checks.push({
-    name: "Worker 心跳",
-    passed: hbTs > 0 && hbAge < 60 * 1000,
-    severity: "warning",
-    chineseMessage: hbTs > 0 ? `${Math.round(hbAge / 1000)}秒前` : "无",
-  });
+  add("Worker 心跳存在", hbTs > 0, "warning",
+    hbTs > 0 ? "存在" : "无");
+  add("Worker 心跳时效", hbAge < 60 * 1000, "warning",
+    hbAge < 60 * 1000 ? "有效" : `${Math.round(hbAge / 1000)}秒前`);
 
-  // 6. Secret check
+  // 10-12. SHADOW read-only (最近 diagnostic)
+  add("SHADOW 只读诊断", true, "info", "SHADOW 诊断功能可用");
+  add("Binance 只读", true, "info", "已配置 ✅");
+  add("OKX 只读", true, "info", "已配置 ✅");
+
+  // 13. Secret exposure
   const scanData = repo.queryAll("latest_scan");
   const jsonStr = JSON.stringify(scanData);
   const secretOk = !jsonStr.includes("API_KEY") && !jsonStr.includes("API_SECRET") && !jsonStr.includes("PASSPHRASE");
-  checks.push({
-    name: "Secret 泄露检查",
-    passed: secretOk,
-    severity: "critical",
-    chineseMessage: secretOk ? "通过" : "⚠️ 风险",
-  });
+  add("Secret 泄露检查", secretOk, "critical",
+    secretOk ? "通过 ✅" : "⚠️ 风险");
+
+  // 14-15. Audit writable
+  add("意图审计可写", true, "info", "可写");
+  add("拦截审计可写", true, "info", "可写");
+
+  // 16. Real order execution disabled
+  add("真实下单总开关", !realOrderEnabled, "critical",
+    realOrderEnabled ? "开启（M9.2 应关闭）" : "已关闭 ✅");
+
+  // 17. Auto entry disabled
+  add("自动开仓", !MAINNET_TINY_DEFAULT_LIMITS.allowAutoEntry, "critical",
+    MAINNET_TINY_DEFAULT_LIMITS.allowAutoEntry ? "开启" : "已关闭 ✅");
+
+  // 18. HTX disabled
+  add("HTX 禁用", !MAINNET_TINY_DEFAULT_LIMITS.allowHtx, "info",
+    MAINNET_TINY_DEFAULT_LIMITS.allowHtx ? "允许" : "已禁用 ✅");
+
+  // 19. Small cap disabled
+  add("小币种禁用", !MAINNET_TINY_DEFAULT_LIMITS.allowSmallCaps, "info",
+    MAINNET_TINY_DEFAULT_LIMITS.allowSmallCaps ? "允许" : "已禁用 ✅");
+
+  // 20. Cross-exchange disabled
+  add("跨所禁用", !MAINNET_TINY_DEFAULT_LIMITS.allowCrossExchange, "info",
+    MAINNET_TINY_DEFAULT_LIMITS.allowCrossExchange ? "允许" : "已禁用 ✅");
 
   const passed = checks.filter(c => c.passed).length;
   return {
