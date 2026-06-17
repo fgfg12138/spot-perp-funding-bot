@@ -5,6 +5,7 @@
  */
 import type { ExchangeId, MarketSnapshot } from "../domain/types";
 import { V121_UNIVERSE, CONSERVATIVE_UNIVERSE, canonicalToExchange } from "./symbolMap";
+import { discoverSameExchangeUniverse } from "./universeDiscovery";
 import { BinancePublicAdapter } from "./adapters/binancePublicAdapter";
 import { OkxPublicAdapter } from "./adapters/okxPublicAdapter";
 import { HtxPublicAdapter } from "./adapters/htxPublicAdapter";
@@ -45,9 +46,19 @@ export async function refreshAndScan(input: {
   isTakerEntry: boolean;
   systemHealthy: boolean;
   symbols?: string[];
+  useDynamicUniverse?: boolean;
 }): Promise<MarketRefreshResult> {
   const now = Date.now();
-  const symbols = input.symbols ?? V121_UNIVERSE;
+  const rawSymbols = input.symbols;
+  let symbols: string[];
+  if (rawSymbols !== undefined && rawSymbols !== null) {
+    symbols = rawSymbols;
+  } else if (input.useDynamicUniverse) {
+    const dynamic = await discoverSameExchangeUniverse();
+    symbols = [...new Set(dynamic.filter(d => d.eligibleForScan).map(d => d.symbol))];
+  } else {
+    symbols = V121_UNIVERSE;
+  }
   const exchanges: ExchangeId[] = ["binance", "okx", "htx"];
   const errors: MarketRefreshResult["errors"] = [];
   const spotMap = new Map<string, MarketSnapshot>();
