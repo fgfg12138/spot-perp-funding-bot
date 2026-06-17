@@ -30,7 +30,7 @@ export default function OpportunitiesPage() {
       });
       const result = await res.json();
       if (!res.ok) { setScanError(result.error ?? `HTTP ${res.status}`); return; }
-      fetchOpps();
+      setData(result);
     } catch (err) { setScanError(String(err)); }
     finally { setScanning(false); }
   };
@@ -57,7 +57,7 @@ export default function OpportunitiesPage() {
         setScanError(result.error ? `${result.error}: ${result.detail || ""}` : `HTTP ${res.status}`);
         return;
       }
-      fetchOpps();
+      setData(result);
     } catch (err) {
       setScanError(String(err));
     } finally {
