@@ -69,7 +69,12 @@ export class SqliteRepository {
     const cols = keys.map(k => `"${k}"`).join(", ");
     const placeholders = keys.map(() => "?").join(", ");
     const sql = `INSERT OR REPLACE INTO "${table}" (${cols}) VALUES (${placeholders})`;
-    this.db.prepare(sql).run(...keys.map(k => record[k]));
+    this.db.prepare(sql).run(...keys.map(k => {
+      const v = record[k];
+      if (v === null || v === undefined) return null;
+      if (typeof v === "object") return JSON.stringify(v);
+      return v;
+    }));
   }
 
   saveAll(table: string, records: Record<string, unknown>[]): void {
@@ -81,7 +86,18 @@ export class SqliteRepository {
 
   queryAll(table: string): Record<string, unknown>[] {
     try {
-      return this.db.prepare(`SELECT * FROM "${table}" ORDER BY rowid`).all();
+      const rows = this.db.prepare(`SELECT * FROM "${table}" ORDER BY rowid`).all() as Record<string, unknown>[];
+      return rows.map(row => {
+        const result: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(row)) {
+          if (typeof v === "string" && (v.startsWith("[") || v.startsWith("{"))) {
+            try { result[k] = JSON.parse(v); } catch { result[k] = v; }
+          } else {
+            result[k] = v;
+          }
+        }
+        return result;
+      });
     } catch { return []; }
   }
 
