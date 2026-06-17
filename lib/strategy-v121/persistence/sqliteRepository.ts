@@ -36,6 +36,7 @@ export class SqliteRepository {
   private migrate(): void {
     const patches: Record<string, string[]> = {
       latest_scan: ["opportunities_json TEXT DEFAULT '[]'"],
+      order_intents: ["intentId TEXT", "mode TEXT", "symbol TEXT", "spot_exchange TEXT", "perp_exchange TEXT", "planned_notional REAL", "gate_allowed INTEGER DEFAULT 0", "blocked_reasons TEXT DEFAULT '[]'", "created_at_utc INTEGER"],
     };
     for (const [table, columns] of Object.entries(patches)) {
       for (const col of columns) {
