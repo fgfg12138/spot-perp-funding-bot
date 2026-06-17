@@ -4,7 +4,7 @@
  * 不下单，不改账户，只读。在 READ_ONLY / PAPER / SHADOW 下均可安全运行。
  */
 import type { ExchangeId, MarketSnapshot } from "../domain/types";
-import { V121_UNIVERSE, canonicalToExchange } from "./symbolMap";
+import { V121_UNIVERSE, CONSERVATIVE_UNIVERSE, canonicalToExchange } from "./symbolMap";
 import { BinancePublicAdapter } from "./adapters/binancePublicAdapter";
 import { OkxPublicAdapter } from "./adapters/okxPublicAdapter";
 import { HtxPublicAdapter } from "./adapters/htxPublicAdapter";
@@ -48,7 +48,7 @@ export async function refreshAndScan(input: {
   symbols?: string[];
 }): Promise<MarketRefreshResult> {
   const now = Date.now();
-  const symbols = input.symbols ?? V121_UNIVERSE;
+  const symbols = input.symbols ?? CONSERVATIVE_UNIVERSE;
   const exchanges: ExchangeId[] = ["binance", "okx", "htx"];
   const errors: MarketRefreshResult["errors"] = [];
   const spotMap = new Map<string, MarketSnapshot>();

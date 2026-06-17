@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 export default function OpportunitiesPage() {
   const [data, setData] = useState<any>(null);
   const [scanning, setScanning] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
 
   const fetchOpps = () => {
     fetch("/api/v121/opportunities").then(r => r.json()).then(setData).catch(() => {});
@@ -14,9 +15,20 @@ export default function OpportunitiesPage() {
 
   const doScan = async () => {
     setScanning(true);
-    await fetch("/api/v121/opportunities/scan", { method: "POST" });
-    fetchOpps();
-    setScanning(false);
+    setScanError(null);
+    try {
+      const res = await fetch("/api/v121/opportunities/scan", { method: "POST" });
+      const result = await res.json();
+      if (!res.ok) {
+        setScanError(result.error ?? `HTTP ${res.status}`);
+        return;
+      }
+      fetchOpps();
+    } catch (err) {
+      setScanError(String(err));
+    } finally {
+      setScanning(false);
+    }
   };
 
   return (
@@ -31,6 +43,12 @@ export default function OpportunitiesPage() {
           {scanning ? "扫描中..." : "触发扫描"}
         </button>
       </div>
+
+      {scanError && (
+        <div className="bg-red-950/30 border border-red-800/40 rounded p-2 mb-4 text-xs text-red-300">
+          扫描失败: {scanError}
+        </div>
+      )}
 
       <p className="text-gray-400 mb-4 text-sm">
         只显示正 funding 期现路径 (Binance / OKX / HTX)

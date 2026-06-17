@@ -82,3 +82,12 @@ export const V121_UNIVERSE: CanonicalSymbol[] = [
   "ARB/USDT",
   "OP/USDT",
 ];
+
+/** 保守 universe — 只包含主流高流动性币，适合初始扫描和 CI 测试 */
+export const CONSERVATIVE_UNIVERSE: CanonicalSymbol[] = [
+  "BTC/USDT",
+  "ETH/USDT",
+  "SOL/USDT",
+  "DOGE/USDT",
+  "XRP/USDT",
+];
