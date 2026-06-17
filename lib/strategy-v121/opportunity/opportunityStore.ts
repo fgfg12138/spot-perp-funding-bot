@@ -42,17 +42,22 @@ export function getLatestScan(): LatestScan | null {
   if (all.length === 0) return null;
   const row = all[all.length - 1] as any;
   let opps: any[] = [];
-  try { opps = JSON.parse(row.opportunities_json ?? "[]"); } catch {}
+  const raw = row.opportunities_json ?? row.opportunities ?? "[]";
+  if (Array.isArray(raw)) {
+    opps = raw;
+  } else if (typeof raw === "string") {
+    try { opps = JSON.parse(raw); } catch {}
+  }
   return {
     opportunities: opps,
-    totalPaths: row.total_paths ?? row.totalPaths ?? 0,
-    passedCount: row.passed_count ?? row.passedCount ?? 0,
-    rejectedCount: row.rejected_count ?? row.rejectedCount ?? 0,
-    rejectSummary: safeParse(row.reject_summary_json ?? row.rejectSummaryJson, {}),
-    errors: safeParse(row.errors_json ?? row.errorsJson, []),
-    dataSource: row.data_source ?? row.dataSource ?? "no_data",
-    scannedAtUtc: row.scanned_at_utc ?? row.scannedAtUtc ?? 0,
-    durationMs: row.duration_ms ?? row.durationMs ?? 0,
+    totalPaths: row.totalPaths ?? row.total_paths ?? row.totalPaths ?? 0,
+    passedCount: row.passedCount ?? row.passed_count ?? row.passedCount ?? 0,
+    rejectedCount: row.rejectedCount ?? row.rejected_count ?? row.rejectedCount ?? 0,
+    rejectSummary: safeParse(row.rejectSummary ?? row.reject_summary_json ?? row.rejectSummaryJson, {}),
+    errors: safeParse(row.errors ?? row.errors_json ?? row.errorsJson, []),
+    dataSource: row.dataSource ?? row.data_source ?? row.dataSource ?? "no_data",
+    scannedAtUtc: row.scannedAtUtc ?? row.scanned_at_utc ?? row.scannedAtUtc ?? 0,
+    durationMs: row.durationMs ?? row.duration_ms ?? row.durationMs ?? 0,
     symbolsScanned: 5,
     exchangesScanned: 3,
   };
