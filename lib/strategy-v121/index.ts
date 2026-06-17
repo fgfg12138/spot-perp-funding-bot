@@ -12,6 +12,7 @@ export * from "./market/contractSpec";
 export * from "./market/fundingNormalize";
 export * from "./market/dataFreshness";
 export * from "./market/marketRefreshService";
+export * from "./market/universeDiscovery";
 export * from "./market/adapters/types";
 export * from "./market/adapters/binancePublicAdapter";
 export * from "./market/adapters/okxPublicAdapter";
@@ -33,6 +34,7 @@ export * from "./execution/shortLegRepair";
 export * from "./execution/paperLifecycle";
 export * from "./execution/paperStore";
 export * from "./execution/orderIntent";
+export * from "./execution/orderConstraintPrecheck";
 
 export * from "./mainnetTiny/mainnetTinyGate";
 export * from "./mainnetTiny/mainnetTinyPreflight";
