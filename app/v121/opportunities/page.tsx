@@ -9,10 +9,15 @@ export default function OpportunitiesPage() {
   const [rehearsal, setRehearsal] = useState<any>(null);
   const [rehearsalLoading, setRehearsalLoading] = useState(false);
   const [universe, setUniverse] = useState<any>(null);
+  const [universeLoading, setUniverseLoading] = useState(false);
 
   const fetchUniverse = async () => {
-    const r = await fetch("/api/v121/opportunities/universe");
-    setUniverse(await r.json());
+    setUniverseLoading(true);
+    try {
+      const r = await fetch("/api/v121/opportunities/universe");
+      if (r.ok) setUniverse(await r.json());
+    } catch {}
+    setUniverseLoading(false);
   };
 
   const doDynamicScan = async () => {
@@ -71,9 +76,9 @@ export default function OpportunitiesPage() {
         >
           {scanning ? "扫描中..." : "触发扫描"}
         </button>
-        <button onClick={fetchUniverse}
-          className="border border-blue-400/60 bg-blue-400/15 text-blue-100 px-3 py-1 text-sm">
-          刷新动态监控池
+        <button onClick={fetchUniverse} disabled={universeLoading}
+          className="border border-blue-400/60 bg-blue-400/15 text-blue-100 px-3 py-1 text-sm disabled:opacity-50">
+          {universeLoading ? "刷新中..." : "刷新动态监控池"}
         </button>
         <button onClick={doDynamicScan} disabled={scanning}
           className="border border-green-400/60 bg-green-400/15 text-green-100 px-3 py-1 text-sm disabled:opacity-50">
