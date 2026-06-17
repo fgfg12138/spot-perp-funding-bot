@@ -25,6 +25,9 @@ export interface OrderIntent {
   manualConfirmPassed: boolean;
   dryRun: boolean;
   realOrderExecutionEnabled: boolean;
+  purpose: "real_arbitrage" | "execution_rehearsal";
+  simulationOnly: boolean;
+  realTradeEligible: boolean;
   dataSource: string;
 }
 
@@ -74,6 +77,10 @@ export function createOrderIntent(params: {
     manualConfirmPassed: confirmOk,
     dryRun,
     realOrderExecutionEnabled: realOrderEnabled,
+    // 修正 16: 正式 intent 写入 real_arbitrage + realTradeEligible
+    purpose: dryRun ? "execution_rehearsal" : "real_arbitrage",
+    simulationOnly: dryRun,
+    realTradeEligible: !dryRun && gate.allowed && limitCheck.allowed,
     dataSource: "order_intent",
   };
 

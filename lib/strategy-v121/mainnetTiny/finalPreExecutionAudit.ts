@@ -81,8 +81,17 @@ export async function runFinalPreExecutionAudit(): Promise<FinalAuditResult> {
   const intents = repo.queryAll("order_intents") as any[];
   if (intents.length === 0) warnings.push("无 dry-run intent 记录");
   // 如果最新 intent 是 rehearsal → 阻止真实 10U
-  const latestIntent = intents.length > 0 ? intents[intents.length - 1] : null;
-  if (latestIntent?.purpose === "execution_rehearsal" || latestIntent?.simulationOnly === true) {
+  const latestIntent = intents
+    .filter(Boolean)
+    .sort((a, b) => {
+      const at = Number(a.createdAtUtc ?? a.created_at ?? a.ts ?? 0);
+      const bt = Number(b.createdAtUtc ?? b.created_at ?? b.ts ?? 0);
+      return bt - at;
+    })[0] ?? null;
+
+  // 修正 14: toBool 兼容 true/1/"1"/"true"
+  const toBool = (v: unknown): boolean => v === true || v === 1 || v === "1" || v === "true";
+  if (latestIntent?.purpose === "execution_rehearsal" || toBool(latestIntent?.simulationOnly)) {
     blockers.push("当前 dry-run intent 来自亏损最小模拟候选，不满足正式套利规则，不能申请真实 10U 验证。");
     capitalPrecheckPassed = false;
     constraintPrecheckPassed = false;
@@ -105,8 +114,8 @@ export async function runFinalPreExecutionAudit(): Promise<FinalAuditResult> {
           intentId, exchange: exchange as any, symbol,
           plannedNotionalUsdt: notional,
           purpose: (latestIntent.purpose ?? (latestIntent.simulationOnly ? "execution_rehearsal" : "real_arbitrage")) as any,
-          simulationOnly: latestIntent.simulationOnly === true || latestIntent.dryRun === true,
-          realTradeEligible: latestIntent.realTradeEligible === true,
+          simulationOnly: toBool(latestIntent.simulationOnly) || toBool(latestIntent.dryRun),
+          realTradeEligible: toBool(latestIntent.realTradeEligible),
         });
         constraintPrecheckPassed = decision.orderConstraintPass;
         capitalPrecheckPassed = decision.capitalPrecheckPass;
@@ -137,7 +146,7 @@ export async function runFinalPreExecutionAudit(): Promise<FinalAuditResult> {
 
   // 修正 8: readyForManual10uApproval 需要 intent 存在 + orchestrator state 允许
   const safeDecisionReady = orchestratorState === "HUMAN_APPROVAL_REQUIRED" || orchestratorState === "FINAL_AUDIT_READY";
-  const hasFormalIntent = !!latestIntent && !(latestIntent?.simulationOnly === true || latestIntent?.dryRun === true);
+  const hasFormalIntent = !!latestIntent && !(toBool(latestIntent?.simulationOnly) || toBool(latestIntent?.dryRun));
 
   return {
     readyForManual10uApproval: blockers.length === 0 && hasFormalIntent && safeDecisionReady,
