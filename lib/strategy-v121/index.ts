@@ -23,6 +23,7 @@ export * from "./opportunity/cooldown";
 export * from "./opportunity/scanner";
 export * from "./opportunity/opportunityStore";
 export * from "./opportunity/opportunityWatcher";
+export * from "./opportunity/leastLossRehearsalSelector";
 
 export * from "./profitability/netProfit";
 

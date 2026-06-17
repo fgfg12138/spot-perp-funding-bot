@@ -73,6 +73,11 @@ export function runFinalPreExecutionAudit(): FinalAuditResult {
 
   const intents = repo.queryAll("order_intents") as any[];
   if (intents.length === 0) warnings.push("无 dry-run intent 记录");
+  // 如果最新 intent 是 rehearsal → 阻止真实 10U
+  const latestIntent = intents.length > 0 ? intents[intents.length - 1] : null;
+  if (latestIntent?.purpose === "execution_rehearsal" || latestIntent?.simulationOnly === true) {
+    blockers.push("当前 dry-run intent 来自亏损最小模拟候选，不满足正式套利规则，不能申请真实 10U 验证。");
+  }
 
   const blocked = repo.queryAll("blocked_execution_attempts");
   const allJson = JSON.stringify(repo.queryAll("latest_scan"));
