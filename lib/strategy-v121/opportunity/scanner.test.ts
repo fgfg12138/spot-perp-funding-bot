@@ -48,9 +48,9 @@ function makeScannerInput() {
 }
 
 describe("generateAllPaths", () => {
-  it("generates 135 paths (15 coins × 9 exchange pairs)", () => {
+  it("generates 117 paths (13 coins × 9 exchange pairs)", () => {
     const paths = generateAllPaths();
-    expect(paths.length).toBe(135); // 15 * 3 * 3
+    expect(paths.length).toBe(117); // 13 * 3 * 3
   });
 
   it("no paths include non-allowed exchanges", () => {
@@ -74,7 +74,7 @@ describe("scanOpportunities", () => {
     const input = makeScannerInput();
     const output = scanOpportunities(input);
     expect(output.opportunities.length).toBe(1);
-    expect(output.totalPaths).toBe(135);
+    expect(output.totalPaths).toBe(117);
     // With funding 0.01% (< 0.05%), the opportunity should be rejected
   });
 
