@@ -58,6 +58,18 @@ export async function refreshAndScan(input: {
     canonical: string, marketType: "spot" | "perp",
   ) => {
     try {
+      if (marketType === "perp" && ex === "htx") {
+        // HTX perp uses swap endpoints
+        const htxTicker = await (adapter as any).fetchTickerSwap(rawSym);
+        const htxOb = await (adapter as any).fetchOrderBookSwap(rawSym, 10);
+        let htxFunding;
+        try { htxFunding = await (adapter as any).fetchFundingInfo(rawSym); } catch { /* optional */ }
+        const snap = buildMarketSnapshot(ex, canonical, "perp", htxTicker, htxOb, htxFunding ?? undefined);
+        perpMap.set(`${ex}:${canonical}`, snap);
+        return;
+      }
+
+      // Standard path
       const ticker = await adapter.fetchTicker(rawSym);
       const ob = await adapter.fetchOrderBook(rawSym, 10);
       let funding;
@@ -65,9 +77,8 @@ export async function refreshAndScan(input: {
         try { funding = await adapter.fetchFundingInfo(rawSym); } catch { /* optional */ }
       }
       const snap = buildMarketSnapshot(ex, canonical, marketType, ticker, ob, funding ?? undefined);
-      const key = `${ex}:${canonical}`;
-      if (marketType === "spot") spotMap.set(key, snap);
-      else perpMap.set(key, snap);
+      if (marketType === "spot") spotMap.set(`${ex}:${canonical}`, snap);
+      else perpMap.set(`${ex}:${canonical}`, snap);
     } catch (err) {
       errors.push({ exchange: ex, symbol: canonical, error: (err as Error).message });
     }

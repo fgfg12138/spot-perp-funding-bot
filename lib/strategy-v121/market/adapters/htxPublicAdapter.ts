@@ -7,6 +7,7 @@
 import type { IPublicAdapter, RawFundingInfo, RawOrderBook, RawTicker } from "./types";
 
 const BASE_URL = "https://api.huobi.pro";
+const SWAP_URL = "https://api.hbdm.com";
 
 export class HtxPublicAdapter implements IPublicAdapter {
   readonly exchangeId = "htx";
@@ -59,6 +60,23 @@ export class HtxPublicAdapter implements IPublicAdapter {
     };
   }
 
+  /** Fetch swap (perp) ticker from HTX linear swap API */
+  async fetchTickerSwap(symbol: string): Promise<RawTicker> {
+    const data = await this.fetchJsonSwap(
+      `${SWAP_URL}/linear-swap-api/v1/swap_market/detail/merged?contract_code=${symbol}`
+    );
+    const tick = data.tick as Record<string, unknown>;
+    return {
+      symbol: symbol,
+      lastPrice: Number(tick?.close ?? 0),
+      bid1: Number((tick?.bid as any[])?.[0] ?? 0),
+      ask1: Number((tick?.ask as any[])?.[0] ?? 0),
+      volume24hUsdt: Number(tick?.vol ?? 0),
+      high: Number(tick?.high ?? 0),
+      low: Number(tick?.low ?? 0),
+    };
+  }
+
   async fetchOrderBook(symbol: string, depth: number = 20): Promise<RawOrderBook> {
     const data = await this.fetchJson(
       `${BASE_URL}/market/depth?symbol=${symbol.toLowerCase()}&type=step0&depth=${depth}`
@@ -69,6 +87,27 @@ export class HtxPublicAdapter implements IPublicAdapter {
       asks: (tick?.asks as any[] ?? []).map(([p, q]: number[]) => [p, q] as [number, number]),
       timestamp: Date.now(),
     };
+  }
+
+  /** Fetch swap (perp) order book */
+  async fetchOrderBookSwap(symbol: string, depth: number = 20): Promise<RawOrderBook> {
+    const data = await this.fetchJsonSwap(
+      `${SWAP_URL}/linear-swap-api/v1/swap_depth?contract_code=${symbol}&type=step0&depth=${depth}`
+    );
+    const tick = data.tick as Record<string, unknown>;
+    return {
+      bids: (tick?.bids as any[] ?? []).map(([p, q]: number[]) => [p, q] as [number, number]),
+      asks: (tick?.asks as any[] ?? []).map(([p, q]: number[]) => [p, q] as [number, number]),
+      timestamp: Date.now(),
+    };
+  }
+
+  private async fetchJsonSwap(url: string): Promise<any> {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTX swap HTTP ${res.status}: ${url}`);
+    const wrapper = await res.json();
+    if (wrapper.status !== "ok") throw new Error(`HTX swap error: ${wrapper["err-msg"] ?? "unknown"}`);
+    return wrapper;
   }
 
   async getTradingStatus(symbol: string): Promise<"trading" | "halt" | "closed"> {
