@@ -84,8 +84,8 @@ export class V121Worker {
         isTakerEntry: false,
         systemHealthy: true,
         useDynamicUniverse: process.env.V121_WORKER_USE_DYNAMIC_UNIVERSE === "true",
-        scanMode: (process.env.V121_WORKER_SCAN_MODE as any) ?? undefined,
-        maxDynamicSymbolsPerExchange: Number(process.env.V121_MAX_DYNAMIC_SYMBOLS_PER_EXCHANGE) || 50,
+        scanMode: ["fixed_universe","dynamic_same_exchange"].includes(process.env.V121_WORKER_SCAN_MODE ?? "") ? (process.env.V121_WORKER_SCAN_MODE as any) : undefined,
+        maxDynamicSymbolsPerExchange: (Number(process.env.V121_MAX_DYNAMIC_SYMBOLS_PER_EXCHANGE) > 0 ? Number(process.env.V121_MAX_DYNAMIC_SYMBOLS_PER_EXCHANGE) : 50),
       });
 
       // 3. 记录行情错误（不中断 Worker）

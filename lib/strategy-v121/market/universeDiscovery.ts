@@ -26,6 +26,21 @@ export async function discoverSameExchangeUniverse(): Promise<SameExchangeUniver
   return [...binance, ...okx];
 }
 
+const PRIORITY_COINS = ["BTC","ETH","SOL","XRP","DOGE","BNB","ADA","AVAX","LINK","SUI"];
+
+function sortByPriority(items: unknown[]): string[] {
+  const list = items.map(c => c as string);
+  const small = new Set(list.filter(c => c.startsWith("1000")));
+  return list.sort((a, b) => {
+    const pa = PRIORITY_COINS.indexOf(a); const pb = PRIORITY_COINS.indexOf(b);
+    if (pa >= 0 && pb >= 0) return pa - pb;
+    if (pa >= 0) return -1; if (pb >= 0) return 1;
+    const ta = small.has(a) ? 0 : 1; const tb = small.has(b) ? 0 : 1;
+    if (ta !== tb) return tb - ta;
+    return a.localeCompare(b);
+  });
+}
+
 async function discoverBinance(): Promise<SameExchangeUniverseItem[]> {
   const [spotData, perpData] = await Promise.all([
     fetch("https://api.binance.com/api/v3/exchangeInfo").then(r => r.json()),
@@ -43,7 +58,7 @@ async function discoverBinance(): Promise<SameExchangeUniverseItem[]> {
       .map((s: any) => s.baseAsset),
   );
 
-  const common = [...spotBases].filter(b => perpBases.has(b)).sort();
+  const common = sortByPriority([...spotBases].filter(b => perpBases.has(b)));
   return common.map(base => {
     const symbol = `${base}/USDT`;
     const small = isSmallCoin(symbol);
@@ -73,7 +88,7 @@ async function discoverOkx(): Promise<SameExchangeUniverseItem[]> {
       .map((s: any) => s.baseCcy),
   );
 
-  const common = [...spotBases].filter(b => perpBases.has(b)).sort();
+  const common = sortByPriority([...spotBases].filter(b => perpBases.has(b)));
   return common.map(base => {
     const symbol = `${base}/USDT`;
     const small = isSmallCoin(symbol);
