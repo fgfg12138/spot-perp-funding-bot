@@ -13,8 +13,8 @@ export const FUNDING_THRESHOLDS = {
 } as const;
 
 export const VOLUME_THRESHOLDS = {
-  MIN_SPOT_VOLUME_24H: 1_000_000,     // 1M USDT
-  MIN_PERP_VOLUME_24H: 5_000_000,     // 5M USDT
+  MIN_SPOT_VOLUME_24H: 200_000,       // 200k USDT
+  MIN_PERP_VOLUME_24H: 1_000_000,     // 1M USDT
 } as const;
 
 export const DEPTH_THRESHOLDS = {

@@ -77,10 +77,10 @@ export function evaluateHardFilters(input: HardFilterInput): HardFilterResult {
 
   // 8. 成交额
   if ((input.spotSnapshot.volume24hUsdt ?? 0) < VOLUME_THRESHOLDS.MIN_SPOT_VOLUME_24H) {
-    rejectReasons.push({ rule: "spot_volume_too_low", detail: `现货24h成交额 $${(input.spotSnapshot.volume24hUsdt ?? 0).toLocaleString()} < $1M` });
+    rejectReasons.push({ rule: "spot_volume_too_low", detail: `现货24h成交额 $${(input.spotSnapshot.volume24hUsdt ?? 0).toLocaleString()} < $200k` });
   }
   if ((input.perpSnapshot.volume24hUsdt ?? 0) < VOLUME_THRESHOLDS.MIN_PERP_VOLUME_24H) {
-    rejectReasons.push({ rule: "perp_volume_too_low", detail: `合约24h成交额 $${(input.perpSnapshot.volume24hUsdt ?? 0).toLocaleString()} < $5M` });
+    rejectReasons.push({ rule: "perp_volume_too_low", detail: `合约24h成交额 $${(input.perpSnapshot.volume24hUsdt ?? 0).toLocaleString()} < $1M` });
   }
 
   // 9. 买卖价差
