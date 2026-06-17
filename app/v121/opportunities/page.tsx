@@ -151,7 +151,10 @@ export default function OpportunitiesPage() {
               setRehearsalLoading(true);
               const r = await fetch("/api/v121/opportunities/rehearsal-candidate/dry-run-intent", { method: "POST" });
               const d = await r.json();
-              alert(d.intentId ? `Dry-run intent 已生成: ${d.intentId}` : `失败: ${d.error ?? JSON.stringify(d)}`);
+              const msg = d.intentId
+                ? `Dry-run intent 已生成: ${d.intentId}`
+                : `失败: ${d.error || "未知"}\n${d.detail || ""}\n${d.stack || ""}`;
+              alert(msg);
               setRehearsalLoading(false);
             }}
             disabled={rehearsalLoading}
