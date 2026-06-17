@@ -72,6 +72,7 @@ export class SqliteRepository {
     this.db.prepare(sql).run(...keys.map(k => {
       const v = record[k];
       if (v === null || v === undefined) return null;
+      if (typeof v === "boolean") return v ? 1 : 0;
       if (typeof v === "object") return JSON.stringify(v);
       return v;
     }));
@@ -89,9 +90,12 @@ export class SqliteRepository {
       const rows = this.db.prepare(`SELECT * FROM "${table}" ORDER BY rowid`).all() as Record<string, unknown>[];
       return rows.map(row => {
         const result: Record<string, unknown> = {};
+        const boolCols = new Set(["gateAllowed","requiresManualConfirm","manualConfirmPassed","dryRun","realOrderExecutionEnabled","passed","allowHtx","allowSmallCaps","allowCrossExchange","requireManualConfirm","allowAutoEntry","allowRiskExit","immutable","isTestThreshold"]);
         for (const [k, v] of Object.entries(row)) {
           if (typeof v === "string" && (v.startsWith("[") || v.startsWith("{"))) {
             try { result[k] = JSON.parse(v); } catch { result[k] = v; }
+          } else if (typeof v === "number" && (v === 0 || v === 1) && boolCols.has(k)) {
+            result[k] = v === 1;
           } else {
             result[k] = v;
           }
