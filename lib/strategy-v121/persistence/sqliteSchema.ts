@@ -36,14 +36,23 @@ export const EXTRA_TABLES: Record<string, string> = {
   ORDER_INTENTS: `
     CREATE TABLE IF NOT EXISTS order_intents (
       id TEXT PRIMARY KEY,
+      intentId TEXT,
       mode TEXT NOT NULL,
       symbol TEXT NOT NULL,
-      spot_exchange TEXT NOT NULL,
-      perp_exchange TEXT NOT NULL,
-      planned_notional REAL NOT NULL,
-      gate_allowed INTEGER DEFAULT 0,
-      blocked_reasons TEXT DEFAULT '[]',
-      created_at_utc INTEGER NOT NULL
+      spotExchange TEXT NOT NULL,
+      perpExchange TEXT NOT NULL,
+      side TEXT NOT NULL DEFAULT 'buy_spot_short_perp',
+      plannedNotionalUsdt REAL NOT NULL,
+      batchNo INTEGER DEFAULT 1,
+      reason TEXT,
+      createdAtUtc INTEGER NOT NULL,
+      gateAllowed INTEGER DEFAULT 0,
+      blockedReasons TEXT DEFAULT '[]',
+      requiresManualConfirm INTEGER DEFAULT 1,
+      manualConfirmPassed INTEGER DEFAULT 0,
+      dryRun INTEGER DEFAULT 1,
+      realOrderExecutionEnabled INTEGER DEFAULT 0,
+      dataSource TEXT DEFAULT 'order_intent'
     );
   `,
   BLOCKED_EXECUTION_ATTEMPTS: `
