@@ -37,6 +37,9 @@ export function updateConfig(partial: Partial<StrategyConfig>): StrategyConfig {
   return getConfig();
 }
 
+/** 默认: 资金不足时不允许自动缩仓 */
+export const ALLOW_AUTO_DOWNSIZE_DEFAULT = false;
+
 // ─── MAINNET_TINY 默认限制 ──────────────────────
 
 export const MAINNET_TINY_DEFAULT_LIMITS = {
