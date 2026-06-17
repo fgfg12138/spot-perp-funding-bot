@@ -76,7 +76,7 @@ export async function runSafeExecutionDecision(
     if (!c.overallPass) blockers.push(`下单限制预检失败: ${c.chineseMessage}`);
   } catch (err: any) {
     blockers.push(`下单限制预检异常: ${err.message}`);
-    return blocked(sessionId, input, blockers, warnings);
+    return frozen(sessionId, input, blockers, "下单限制预检异常，系统已冻结");
   }
 
   // 3. Capital precheck
@@ -97,7 +97,7 @@ export async function runSafeExecutionDecision(
     }
   } catch (err: any) {
     blockers.push(`资金预检异常: ${err.message}`);
-    return blocked(sessionId, input, blockers, warnings);
+    return frozen(sessionId, input, blockers, "资金预检异常，系统已冻结");
   }
 
   // 4. 需要划转 → TRANSFER_REQUIRED
@@ -155,5 +155,22 @@ function blocked(
     needsAutoTransfer: false, requiredNextAction: "none",
     realExecutionAllowed: false,
     chineseMessage: `安全决策未通过: ${blockers.join("；")}`,
+  };
+}
+
+function frozen(
+  sessionId: string, input: SafeExecutionInput,
+  blockers: string[], message: string,
+): SafeExecutionDecision {
+  return {
+    sessionId, intentId: input.intentId,
+    state: "FROZEN",
+    exchange: input.exchange, symbol: input.symbol,
+    plannedNotionalUsdt: input.plannedNotionalUsdt,
+    blockers, warnings: [],
+    orderConstraintPass: false, capitalPrecheckPass: false,
+    needsAutoTransfer: false, requiredNextAction: "manual_intervention",
+    realExecutionAllowed: false,
+    chineseMessage: message,
   };
 }
