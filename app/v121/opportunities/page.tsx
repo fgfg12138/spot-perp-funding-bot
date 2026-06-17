@@ -20,7 +20,7 @@ export default function OpportunitiesPage() {
       const res = await fetch("/api/v121/opportunities/scan", { method: "POST" });
       const result = await res.json();
       if (!res.ok) {
-        setScanError(result.error ?? `HTTP ${res.status}`);
+        setScanError(result.error ? `${result.error}: ${result.detail || ""}` : `HTTP ${res.status}`);
         return;
       }
       fetchOpps();
