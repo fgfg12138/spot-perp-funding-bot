@@ -57,7 +57,7 @@ export const EXTRA_TABLES: Record<string, string> = {
     );
   `,
   WORKER_HEARTBEATS: `
-    CREATE TABLE IF NOT EXISTS worker_heartbeats (
+    CREATE TABLE IF NOT EXISTS worker_heartbeat (
       id TEXT PRIMARY KEY,
       worker_id TEXT NOT NULL,
       state TEXT NOT NULL DEFAULT 'stopped',
@@ -77,5 +77,5 @@ export const ALL_TABLE_NAMES = [
   "opportunity_records", "entry_decisions", "entry_executions",
   "position_snapshots", "funding_settlements", "exit_executions", "final_reviews",
   "paper_executions", "latest_scan", "order_intents",
-  "blocked_execution_attempts", "worker_heartbeats",
+  "blocked_execution_attempts", "worker_heartbeat",
 ];

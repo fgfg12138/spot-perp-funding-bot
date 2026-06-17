@@ -47,7 +47,7 @@ export function runFinalPreExecutionAudit(): FinalAuditResult {
   if (ks !== "OFF") blockers.push(`Kill Switch 为 ${ks}`);
   if (realOrderEnabled) warnings.push("V121_REAL_ORDER_EXECUTION_ENABLED=true — M9.4 应关闭");
 
-  const hb = repo.latest("worker_heartbeats") as any;
+  const hb = repo.latest("worker_heartbeat") as any;
   const hbTs = Number(hb?.lastCycleAtUtc ?? hb?.last_cycle_at_utc ?? 0);
   const hbAge = hbTs > 0 ? (Date.now() - hbTs) / 1000 : Infinity;
   if (hbAge > 120) warnings.push(`Worker 心跳 ${Math.round(hbAge)} 秒前`);

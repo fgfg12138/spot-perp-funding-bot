@@ -62,7 +62,7 @@ export function runMainnetTinyPreflight(): PreflightResult {
     scanDs || "未知");
 
   // 8-9. Worker heartbeat
-  const hb = repo.latest("worker_heartbeats");
+  const hb = repo.latest("worker_heartbeat");
   const hbTs = Number((hb as any)?.lastCycleAtUtc ?? (hb as any)?.last_cycle_at_utc ?? 0);
   const hbAge = hbTs > 0 ? Date.now() - hbTs : Infinity;
   add("Worker 心跳存在", hbTs > 0, "warning",
