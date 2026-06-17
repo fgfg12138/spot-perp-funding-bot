@@ -43,7 +43,7 @@ export function middleware(request: NextRequest) {
   if (ALLOWED_MUTATION_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
     const response = NextResponse.next();
     response.headers.set("X-Read-Only", "true");
-    response.headers.set("X-Read-Only-Message", "本地配置端点 — 不影响交易所或真实账户");
+    response.headers.set("X-Read-Only-Message", "Local config only - no real trading");
     return response;
   }
 
