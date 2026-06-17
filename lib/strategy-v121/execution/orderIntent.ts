@@ -6,7 +6,7 @@ import type { ExchangeId } from "../domain/types";
 import { checkMainnetTinyGate, validateOrderIntent } from "../mainnetTiny/mainnetTinyGate";
 import { getRepository } from "../persistence/repositoryFactory";
 
-const repo = getRepository();
+function repo() { return getRepository(); }
 
 export interface OrderIntent {
   intentId: string;
@@ -77,19 +77,19 @@ export function createOrderIntent(params: {
     dataSource: "order_intent",
   };
 
-  repo.save("order_intents", intent as any);
+  repo().save("order_intents", intent as any);
   return intent;
 }
 
 export function getOrderIntents(): OrderIntent[] {
-  return repo.queryAll("order_intents") as unknown as OrderIntent[];
+  return repo().queryAll("order_intents") as unknown as OrderIntent[];
 }
 
 export function recordBlockedAttempt(params: {
   mode: string; action: string; symbol?: string; exchange?: string;
   reason: string; gateStatus: any;
 }): void {
-  repo.save("blocked_execution_attempts", {
+  repo().save("blocked_execution_attempts", {
     id: `blocked-${Date.now()}`,
     mode: params.mode, action: params.action,
     symbol: params.symbol ?? "", exchange: params.exchange ?? "",
@@ -100,5 +100,5 @@ export function recordBlockedAttempt(params: {
 }
 
 export function getBlockedAttempts(): any[] {
-  return repo.queryAll("blocked_execution_attempts");
+  return repo().queryAll("blocked_execution_attempts");
 }

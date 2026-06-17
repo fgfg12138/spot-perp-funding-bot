@@ -11,10 +11,9 @@ import { HtxPublicAdapter } from "./adapters/htxPublicAdapter";
 import { buildMarketSnapshot } from "./adapters/types";
 import { scanOpportunities } from "../opportunity/scanner";
 import { saveLatestScan } from "../opportunity/opportunityStore";
-import { FileSystemRepository } from "../persistence/fileSystemRepository";
-import * as path from "node:path";
+import { getRepository } from "../persistence/repositoryFactory";
 
-const repo = new FileSystemRepository(path.join(process.cwd(), ".v121-data"));
+function repo() { return getRepository(); }
 
 interface UnifiedAdapter {
   exchangeId: ExchangeId;
@@ -99,7 +98,7 @@ export async function refreshAndScan(input: {
 
   // 持久化
   for (const opp of scanResult.opportunities) {
-    repo.save("opportunity_records", {
+    repo().save("opportunity_records", {
       ...opp,
       dataSource: "real_market",
       scannedAtUtc: now,

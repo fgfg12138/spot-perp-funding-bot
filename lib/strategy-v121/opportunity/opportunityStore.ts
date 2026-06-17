@@ -3,11 +3,9 @@
  *
  * ⚠️ DEV-ONLY: JSONL 持久化，不适用于 MAINNET_TINY。
  */
-import { FileSystemRepository } from "../persistence/fileSystemRepository";
 import { getRepository } from "../persistence/repositoryFactory";
-import * as path from "node:path";
 
-const repo = getRepository();
+function repo() { return getRepository(); }
 
 export interface LatestScan {
   opportunities: any[];
@@ -24,15 +22,15 @@ export interface LatestScan {
 }
 
 export function saveLatestScan(scan: LatestScan): void {
-  repo.clear("latest_scan");
-  repo.save("latest_scan", scan as any);
+  repo().clear("latest_scan");
+  repo().save("latest_scan", scan as any);
 }
 
 export function getLatestScan(): LatestScan | null {
-  const all = repo.queryAll("latest_scan");
+  const all = repo().queryAll("latest_scan");
   return all.length > 0 ? (all[all.length - 1] as any) : null;
 }
 
 export function clearLatestScan(): void {
-  repo.clear("latest_scan");
+  repo().clear("latest_scan");
 }

@@ -1,14 +1,13 @@
 import type { PaperExecution } from "./paperLifecycle";
-import { FileSystemRepository } from "../persistence/fileSystemRepository";
-import * as path from "node:path";
+import { getRepository } from "../persistence/repositoryFactory";
 
 /**
- * Paper execution store — JSONL 持久化。
+ * Paper execution store — JSONL/SQLite 持久化。
  *
- * ⚠️ DEV-ONLY: 开发持久化，仅用于 PAPER，不允许用于 MAINNET_TINY。
- * TODO: 迁移到 SQLite 后再用于 MAINNET_TINY。
+ * ⚠️ DEV-ONLY 当 persistence=jsonl-dev-only。
+ * TODO: 正式用于 MAINNET_TINY 需 sqlite-active。
  */
-const repo = new FileSystemRepository(path.join(process.cwd(), ".v121-data"));
+function repo() { return getRepository(); }
 
 export class PaperExecutionStore {
   private cache = new Map<string, PaperExecution>();
@@ -19,7 +18,7 @@ export class PaperExecutionStore {
 
   private loadFromDisk(): void {
     try {
-      const records = repo.queryAll("paper_executions") as any[];
+      const records = repo().queryAll("paper_executions") as any[];
       for (const r of records) {
         if (r.id) this.cache.set(r.id, r as PaperExecution);
       }
@@ -27,9 +26,9 @@ export class PaperExecutionStore {
   }
 
   private flushToDisk(): void {
-    repo.clear("paper_executions");
+    repo().clear("paper_executions");
     for (const ex of this.cache.values()) {
-      repo.save("paper_executions", ex as any);
+      repo().save("paper_executions", ex as any);
     }
   }
 
