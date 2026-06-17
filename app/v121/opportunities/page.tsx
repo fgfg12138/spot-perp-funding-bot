@@ -8,6 +8,27 @@ export default function OpportunitiesPage() {
   const [scanError, setScanError] = useState<string | null>(null);
   const [rehearsal, setRehearsal] = useState<any>(null);
   const [rehearsalLoading, setRehearsalLoading] = useState(false);
+  const [universe, setUniverse] = useState<any>(null);
+
+  const fetchUniverse = async () => {
+    const r = await fetch("/api/v121/opportunities/universe");
+    setUniverse(await r.json());
+  };
+
+  const doDynamicScan = async () => {
+    setScanning(true); setScanError(null);
+    try {
+      const res = await fetch("/api/v121/opportunities/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ useDynamicUniverse: true, scanMode: "dynamic_same_exchange" }),
+      });
+      const result = await res.json();
+      if (!res.ok) { setScanError(result.error ?? `HTTP ${res.status}`); return; }
+      fetchOpps();
+    } catch (err) { setScanError(String(err)); }
+    finally { setScanning(false); }
+  };
 
   const fetchOpps = () => {
     fetch("/api/v121/opportunities").then(r => r.json()).then(setData).catch(() => {});
@@ -50,7 +71,21 @@ export default function OpportunitiesPage() {
         >
           {scanning ? "扫描中..." : "触发扫描"}
         </button>
+        <button onClick={fetchUniverse}
+          className="border border-blue-400/60 bg-blue-400/15 text-blue-100 px-3 py-1 text-sm">
+          刷新动态监控池
+        </button>
+        <button onClick={doDynamicScan} disabled={scanning}
+          className="border border-green-400/60 bg-green-400/15 text-green-100 px-3 py-1 text-sm disabled:opacity-50">
+          {scanning ? "扫描中..." : "动态池扫描"}
+        </button>
       </div>
+
+      {universe && (
+        <div className="text-xs text-gray-500 mb-2">
+          动态池: Binance {universe.binanceCount ?? universe.items?.filter((i:any) => i.exchange === "binance").length ?? "?"} | OKX {universe.okxCount ?? universe.items?.filter((i:any) => i.exchange === "okx").length ?? "?"} 个同所币种
+        </div>
+      )}
 
       {scanError && (
         <div className="bg-red-950/30 border border-red-800/40 rounded p-2 mb-4 text-xs text-red-300">
