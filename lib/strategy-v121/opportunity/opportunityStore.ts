@@ -23,7 +23,6 @@ export interface LatestScan {
 
 export function saveLatestScan(scan: LatestScan): void {
   repo().clear("latest_scan");
-  // Map to snake_case for SQLite compatibility
   repo().save("latest_scan", {
     id: `scan-${scan.scannedAtUtc}`,
     total_paths: scan.totalPaths,
@@ -34,6 +33,7 @@ export function saveLatestScan(scan: LatestScan): void {
     duration_ms: scan.durationMs,
     errors_json: JSON.stringify(scan.errors),
     reject_summary_json: JSON.stringify(scan.rejectSummary),
+    opportunities_json: JSON.stringify(scan.opportunities ?? []),
   } as any);
 }
 
@@ -41,8 +41,10 @@ export function getLatestScan(): LatestScan | null {
   const all = repo().queryAll("latest_scan");
   if (all.length === 0) return null;
   const row = all[all.length - 1] as any;
+  let opps: any[] = [];
+  try { opps = JSON.parse(row.opportunities_json ?? "[]"); } catch {}
   return {
-    opportunities: [],
+    opportunities: opps,
     totalPaths: row.total_paths ?? row.totalPaths ?? 0,
     passedCount: row.passed_count ?? row.passedCount ?? 0,
     rejectedCount: row.rejected_count ?? row.rejectedCount ?? 0,
