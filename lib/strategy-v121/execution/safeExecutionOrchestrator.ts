@@ -6,13 +6,8 @@
 import type { ExchangeId } from "../domain/types";
 
 export type SafeExecutionState =
-  | "IDLE"
-  | "BLOCKED"
-  | "TRANSFER_REQUIRED"
-  | "FINAL_AUDIT_READY"
-  | "HUMAN_APPROVAL_REQUIRED"
-  | "FROZEN"
-  | "MANUAL_INTERVENTION_REQUIRED";
+  | "BLOCKED" | "TRANSFER_REQUIRED" | "FINAL_AUDIT_READY"
+  | "HUMAN_APPROVAL_REQUIRED" | "FROZEN";
 
 export type SafeExecutionPurpose = "real_arbitrage" | "execution_rehearsal";
 
@@ -27,17 +22,12 @@ export interface SafeExecutionInput {
 }
 
 export interface SafeExecutionDecision {
-  sessionId: string;
-  intentId: string;
+  sessionId: string; intentId: string;
   state: SafeExecutionState;
-  exchange: ExchangeId;
-  symbol: string;
-  plannedNotionalUsdt: number;
-  actualNotionalUsdt?: number;
-  blockers: string[];
-  warnings: string[];
-  orderConstraintPass: boolean;
-  capitalPrecheckPass: boolean;
+  exchange: ExchangeId; symbol: string;
+  plannedNotionalUsdt: number; actualNotionalUsdt?: number;
+  blockers: string[]; warnings: string[];
+  orderConstraintPass: boolean; capitalPrecheckPass: boolean;
   needsAutoTransfer: boolean;
   transferPlan?: { from: "spot" | "perp"; to: "spot" | "perp"; amountUsdt: number; reason: string };
   requiredNextAction: "none" | "execute_transfer" | "rerun_audit" | "human_approve" | "manual_intervention";
@@ -45,132 +35,89 @@ export interface SafeExecutionDecision {
   chineseMessage: string;
 }
 
-export async function runSafeExecutionDecision(
-  input: SafeExecutionInput,
-): Promise<SafeExecutionDecision> {
-  const blockers: string[] = [];
-  const warnings: string[] = [];
-  const sessionId = `sx-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+const b = (input: SafeExecutionInput, blockers: string[], st: SafeExecutionState = "BLOCKED", next: SafeExecutionDecision["requiredNextAction"] = "none", msg?: string): SafeExecutionDecision => ({
+  sessionId: `sx-${Date.now()}`, intentId: input.intentId,
+  state: st, exchange: input.exchange, symbol: input.symbol,
+  plannedNotionalUsdt: input.plannedNotionalUsdt,
+  blockers, warnings: [],
+  orderConstraintPass: false, capitalPrecheckPass: false,
+  needsAutoTransfer: false, requiredNextAction: next,
+  realExecutionAllowed: false,
+  chineseMessage: msg ?? `安全决策未通过: ${blockers.join("；")}`,
+});
 
-  // 1. simulationOnly → 直接 BLOCKED
+export async function runSafeExecutionDecision(input: SafeExecutionInput): Promise<SafeExecutionDecision> {
+  // 修正 4: HTX 必须 BLOCKED
+  if (!["binance", "okx"].includes(input.exchange)) {
+    return b(input, ["HTX 仅观察，不进入 MAINNET_TINY 安全执行。"]);
+  }
+  // 修正 5: realTradeEligible 必须为 true
+  if (!input.realTradeEligible) {
+    return b(input, ["realTradeEligible 不为 true，不允许执行。"]);
+  }
+  // simulationOnly → BLOCKED
   if (input.simulationOnly || input.purpose === "execution_rehearsal") {
-    return {
-      sessionId, intentId: input.intentId,
-      state: "BLOCKED",
-      exchange: input.exchange, symbol: input.symbol,
-      plannedNotionalUsdt: input.plannedNotionalUsdt,
-      blockers: ["模拟候选不允许自动划转或真实下单。"],
-      warnings: [], orderConstraintPass: false, capitalPrecheckPass: false,
-      needsAutoTransfer: false, requiredNextAction: "none",
-      realExecutionAllowed: false,
-      chineseMessage: "模拟候选仅用于流程测试，不允许真实划转或下单。",
-    };
+    return b(input, ["模拟候选不允许自动划转或真实下单。"]);
   }
 
-  // 2. Order constraint precheck
-  let constraintPass = false;
+  // 修正 2: orderConstraint → 失败直接 BLOCKED
+  let ocp: Awaited<ReturnType<(typeof import("./orderConstraintPrecheck"))["checkOrderConstraint"]>> | undefined;
   try {
     const { checkOrderConstraint } = await import("./orderConstraintPrecheck");
-    const c = await checkOrderConstraint(input.exchange, input.symbol, input.plannedNotionalUsdt);
-    constraintPass = c.overallPass;
-    if (!c.overallPass) blockers.push(`下单限制预检失败: ${c.chineseMessage}`);
-  } catch (err: any) {
-    blockers.push(`下单限制预检异常: ${err.message}`);
-    return frozen(sessionId, input, blockers, "下单限制预检异常，系统已冻结");
+    ocp = await checkOrderConstraint(input.exchange, input.symbol, input.plannedNotionalUsdt);
+  } catch (e: any) {
+    return b(input, [`下单限制预检异常: ${e.message}`], "FROZEN", "manual_intervention");
+  }
+  if (!ocp || !ocp.overallPass) {
+    return b(input, [`下单限制预检未通过: ${ocp?.chineseMessage ?? "未知"}`], "BLOCKED");
   }
 
-  // 3. Capital precheck
-  let capitalPass = false;
-  let needsTransfer = false;
-  let transferPlan: SafeExecutionDecision["transferPlan"];
-  let actualNotional = input.plannedNotionalUsdt;
-
+  // 修正 3: capital precheck
+  let cp: Awaited<ReturnType<(typeof import("./capitalPrecheck"))["runCapitalPrecheck"]>> | undefined;
   try {
     const { runCapitalPrecheck } = await import("./capitalPrecheck");
-    const cap = await runCapitalPrecheck(input.exchange, input.symbol, input.plannedNotionalUsdt);
-    capitalPass = cap.passBeforeTransfer;
-    actualNotional = Math.min(cap.actualNotionalUsdt, input.plannedNotionalUsdt);
-    needsTransfer = cap.needsAutoTransfer;
-    if (cap.transferPlan) transferPlan = cap.transferPlan;
-    if (!cap.passBeforeTransfer && !needsTransfer) {
-      blockers.push(`资金预检失败: ${cap.blockReason ?? cap.chineseMessage}`);
-    }
-  } catch (err: any) {
-    blockers.push(`资金预检异常: ${err.message}`);
-    return frozen(sessionId, input, blockers, "资金预检异常，系统已冻结");
+    cp = await runCapitalPrecheck(input.exchange, input.symbol, input.plannedNotionalUsdt);
+  } catch (e: any) {
+    return b(input, [`资金预检异常: ${e.message}`], "FROZEN", "manual_intervention");
+  }
+  if (!cp) return b(input, ["资金预检返回未知结果"], "BLOCKED");
+
+  // 修正 6: actualNotional ≤ plannedNotional
+  const actualNotional = Math.min(cp.actualNotionalUsdt, input.plannedNotionalUsdt);
+
+  // 修正 3: 二次检查 actualNotional 是否 >= minRequired
+  if (actualNotional < cp.minRequiredNotionalUsdt) {
+    return b(input, [`实际金额 ${actualNotional.toFixed(2)}U < 最小要求 ${cp.minRequiredNotionalUsdt}U`], "BLOCKED");
   }
 
-  // 4. 需要划转 → TRANSFER_REQUIRED
-  if (needsTransfer && transferPlan) {
+  // 需要划转 → TRANSFER_REQUIRED（修正 2: 只有 orderConstraint 通过后才到这里）
+  if (cp.needsAutoTransfer && cp.autoTransferAllowed) {
     return {
-      sessionId, intentId: input.intentId,
-      state: "TRANSFER_REQUIRED",
-      exchange: input.exchange, symbol: input.symbol,
-      plannedNotionalUsdt: input.plannedNotionalUsdt,
-      actualNotionalUsdt: actualNotional,
-      blockers, warnings,
-      orderConstraintPass: constraintPass,
-      capitalPrecheckPass: false,
-      needsAutoTransfer: true,
-      transferPlan,
-      requiredNextAction: "execute_transfer",
-      realExecutionAllowed: false,
-      chineseMessage: `需要自动内部划转 ${transferPlan.amountUsdt}U (${transferPlan.from}→${transferPlan.to})，划转完成并重新审计前不能下单`,
+      sessionId: `sx-${Date.now()}`, intentId: input.intentId,
+      state: "TRANSFER_REQUIRED", exchange: input.exchange, symbol: input.symbol,
+      plannedNotionalUsdt: input.plannedNotionalUsdt, actualNotionalUsdt: actualNotional,
+      blockers: ["需要自动内部划转。划转完成并重新审计前不能下单。"], warnings: [],
+      orderConstraintPass: true, capitalPrecheckPass: false,
+      needsAutoTransfer: true, transferPlan: cp.transferPlan,
+      requiredNextAction: "execute_transfer", realExecutionAllowed: false,
+      chineseMessage: `需要划转 ${cp.transferPlan?.amountUsdt?.toFixed(2)}U (${cp.transferPlan?.from}→${cp.transferPlan?.to})。`,
     };
   }
 
-  // 5. 有 blockers → BLOCKED
-  if (blockers.length > 0) {
-    return blocked(sessionId, input, blockers, warnings);
+  // 资金不通过且不可划转 → BLOCKED
+  if (!cp.passBeforeTransfer) {
+    return b(input, [`资金预检未通过: ${cp.blockReason ?? cp.chineseMessage}`], "BLOCKED");
   }
 
-  // 6. 全部通过 → FINAL_AUDIT_READY
+  // 全部通过
   return {
-    sessionId, intentId: input.intentId,
-    state: "FINAL_AUDIT_READY",
-    exchange: input.exchange, symbol: input.symbol,
-    plannedNotionalUsdt: input.plannedNotionalUsdt,
-    actualNotionalUsdt: actualNotional,
-    blockers, warnings,
-    orderConstraintPass: constraintPass,
-    capitalPrecheckPass: capitalPass,
-    needsAutoTransfer: false,
-    requiredNextAction: "human_approve",
+    sessionId: `sx-${Date.now()}`, intentId: input.intentId,
+    state: "HUMAN_APPROVAL_REQUIRED", exchange: input.exchange, symbol: input.symbol,
+    plannedNotionalUsdt: input.plannedNotionalUsdt, actualNotionalUsdt: actualNotional,
+    blockers: [], warnings: [],
+    orderConstraintPass: true, capitalPrecheckPass: true,
+    needsAutoTransfer: false, requiredNextAction: "human_approve",
     realExecutionAllowed: false,
-    chineseMessage: `安全决策通过。actualNotional=${actualNotional.toFixed(2)}U。等待人工确认。`,
-  };
-}
-
-function blocked(
-  sessionId: string, input: SafeExecutionInput,
-  blockers: string[], warnings: string[],
-): SafeExecutionDecision {
-  return {
-    sessionId, intentId: input.intentId,
-    state: "BLOCKED",
-    exchange: input.exchange, symbol: input.symbol,
-    plannedNotionalUsdt: input.plannedNotionalUsdt,
-    blockers, warnings,
-    orderConstraintPass: false, capitalPrecheckPass: false,
-    needsAutoTransfer: false, requiredNextAction: "none",
-    realExecutionAllowed: false,
-    chineseMessage: `安全决策未通过: ${blockers.join("；")}`,
-  };
-}
-
-function frozen(
-  sessionId: string, input: SafeExecutionInput,
-  blockers: string[], message: string,
-): SafeExecutionDecision {
-  return {
-    sessionId, intentId: input.intentId,
-    state: "FROZEN",
-    exchange: input.exchange, symbol: input.symbol,
-    plannedNotionalUsdt: input.plannedNotionalUsdt,
-    blockers, warnings: [],
-    orderConstraintPass: false, capitalPrecheckPass: false,
-    needsAutoTransfer: false, requiredNextAction: "manual_intervention",
-    realExecutionAllowed: false,
-    chineseMessage: message,
+    chineseMessage: `预检全部通过，actual=${actualNotional.toFixed(2)}U。等待人工确认。当前不会真实下单。`,
   };
 }

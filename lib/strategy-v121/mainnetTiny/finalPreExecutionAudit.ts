@@ -87,39 +87,45 @@ export async function runFinalPreExecutionAudit(): Promise<FinalAuditResult> {
     capitalPrecheckPassed = false;
     constraintPrecheckPassed = false;
   } else if (latestIntent) {
-    // 正式 intent → 使用 Safe Execution Orchestrator
-    const input = {
-      intentId: latestIntent.intentId ?? latestIntent.id ?? "",
-      exchange: (latestIntent.spotExchange ?? latestIntent.spot_exchange ?? "binance") as any,
-      symbol: latestIntent.symbol ?? "BTC/USDT",
-      plannedNotionalUsdt: Number(latestIntent.plannedNotionalUsdt ?? latestIntent.planned_notional ?? 10),
-      purpose: (latestIntent.purpose ?? "real_arbitrage") as any,
-      simulationOnly: latestIntent.simulationOnly === true || latestIntent.dryRun === true,
-      realTradeEligible: latestIntent.realTradeEligible !== false,
-    };
+    // 正式 intent → 修正 1: 缺失即 blocker（不兜底默认值）
+    const intentId = latestIntent.intentId ?? latestIntent.id;
+    const exchange = latestIntent.spotExchange ?? latestIntent.spot_exchange;
+    const symbol = latestIntent.symbol;
+    const notional = Number(latestIntent.plannedNotionalUsdt ?? latestIntent.planned_notional ?? 0);
 
-    try {
-      const { runSafeExecutionDecision } = await import("../execution/safeExecutionOrchestrator");
-      const decision = await runSafeExecutionDecision(input);
-      constraintPrecheckPassed = decision.orderConstraintPass;
-      capitalPrecheckPassed = decision.capitalPrecheckPass;
+    if (!intentId) blockers.push("intentId 缺失");
+    if (!exchange) blockers.push("exchange 缺失");
+    if (!symbol) blockers.push("symbol 缺失");
+    if (notional <= 0) blockers.push("plannedNotionalUsdt 缺失或 <= 0");
 
-      // 记录 orchestrator evidence
-      orchestratorState = decision.state;
-      orchestratorBlockers = decision.blockers;
+    if (blockers.length === 0) {
+      try {
+        const { runSafeExecutionDecision } = await import("../execution/safeExecutionOrchestrator");
+        const decision = await runSafeExecutionDecision({
+          intentId, exchange: exchange as any, symbol,
+          plannedNotionalUsdt: notional,
+          purpose: (latestIntent.purpose ?? (latestIntent.simulationOnly ? "execution_rehearsal" : "real_arbitrage")) as any,
+          simulationOnly: latestIntent.simulationOnly === true || latestIntent.dryRun === true,
+          realTradeEligible: latestIntent.realTradeEligible === true,
+        });
+        constraintPrecheckPassed = decision.orderConstraintPass;
+        capitalPrecheckPassed = decision.capitalPrecheckPass;
+        orchestratorState = decision.state;
+        orchestratorBlockers = decision.blockers;
 
-      if (decision.state === "BLOCKED") {
-        for (const b of decision.blockers) blockers.push(b);
-      } else if (decision.state === "TRANSFER_REQUIRED") {
-        blockers.push("需要自动内部划转，划转完成并重新审计前不能下单");
-      } else if (decision.state === "FROZEN" || decision.state === "MANUAL_INTERVENTION_REQUIRED") {
-        blockers.push("系统状态异常，需要人工介入");
+        // 修正 7: TRANSFER_REQUIRED / BLOCKED / FROZEN → blocker
+        if (["BLOCKED", "FROZEN", "TRANSFER_REQUIRED"].includes(decision.state)) {
+          blockers.push(...decision.blockers);
+        }
+      } catch (err: any) {
+        constraintPrecheckPassed = false;
+        capitalPrecheckPassed = false;
+        blockers.push(`安全决策异常: ${err.message}`);
       }
-    } catch (err: any) {
-      constraintPrecheckPassed = false;
-      capitalPrecheckPassed = false;
-      blockers.push(`安全决策异常: ${err.message}`);
     }
+  } else {
+    // 修正 9: 没有 latest intent
+    blockers.push("没有正式 dry-run intent，不能申请真实 10U 验证。");
   }
 
   const blocked = repo.queryAll("blocked_execution_attempts");
@@ -129,8 +135,12 @@ export async function runFinalPreExecutionAudit(): Promise<FinalAuditResult> {
   const runbookOk = fs.existsSync(path.join(process.cwd(), "docs/mainnet_tiny_runbook.md"));
   const checklistOk = fs.existsSync(path.join(process.cwd(), "docs/mainnet_tiny_final_checklist.md"));
 
+  // 修正 8: readyForManual10uApproval 需要 intent 存在 + orchestrator state 允许
+  const safeDecisionReady = orchestratorState === "HUMAN_APPROVAL_REQUIRED" || orchestratorState === "FINAL_AUDIT_READY";
+  const hasFormalIntent = !!latestIntent && !(latestIntent?.simulationOnly === true || latestIntent?.dryRun === true);
+
   return {
-    readyForManual10uApproval: blockers.length === 0,
+    readyForManual10uApproval: blockers.length === 0 && hasFormalIntent && safeDecisionReady,
     allowedForActualExecution: false,
     blockers, warnings,
     evidence: {
