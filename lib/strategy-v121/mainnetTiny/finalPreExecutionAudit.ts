@@ -24,6 +24,7 @@ export interface FinalAuditResult {
     runbookExists: boolean; checklistExists: boolean;
     capitalPrecheckPassed?: boolean;
     constraintPrecheckPassed?: boolean;
+    orchestratorState?: string;
   };
   chineseMessage: string;
 }
@@ -69,6 +70,8 @@ export async function runFinalPreExecutionAudit(): Promise<FinalAuditResult> {
   const realAlerts = alerts.filter((a: any) => !testAlerts.includes(a));
   let capitalPrecheckPassed: boolean | undefined;
   let constraintPrecheckPassed: boolean | undefined;
+  let orchestratorState: string | undefined;
+  let orchestratorBlockers: string[] = [];
   if (realAlerts.length === 0 && testAlerts.length > 0) {
     blockers.push("当前机会来自测试阈值，不满足正式 0.05% 资金费门槛，不能进入真实 10U 套利验证。");
   } else if (alerts.length === 0) {
@@ -84,33 +87,38 @@ export async function runFinalPreExecutionAudit(): Promise<FinalAuditResult> {
     capitalPrecheckPassed = false;
     constraintPrecheckPassed = false;
   } else if (latestIntent) {
-    // 正式 intent → 跑下单限制预检和资金预检
-    const exchange = (latestIntent.spotExchange ?? latestIntent.spot_exchange ?? "binance") as any;
-    const symbol = latestIntent.symbol ?? "BTC/USDT";
-    const notional = Number(latestIntent.plannedNotionalUsdt ?? latestIntent.planned_notional ?? 10);
+    // 正式 intent → 使用 Safe Execution Orchestrator
+    const input = {
+      intentId: latestIntent.intentId ?? latestIntent.id ?? "",
+      exchange: (latestIntent.spotExchange ?? latestIntent.spot_exchange ?? "binance") as any,
+      symbol: latestIntent.symbol ?? "BTC/USDT",
+      plannedNotionalUsdt: Number(latestIntent.plannedNotionalUsdt ?? latestIntent.planned_notional ?? 10),
+      purpose: (latestIntent.purpose ?? "real_arbitrage") as any,
+      simulationOnly: latestIntent.simulationOnly === true || latestIntent.dryRun === true,
+      realTradeEligible: latestIntent.realTradeEligible !== false,
+    };
 
     try {
-      const { checkOrderConstraint } = await import("../execution/orderConstraintPrecheck");
-      const constraint = await checkOrderConstraint(exchange, symbol, notional);
-      constraintPrecheckPassed = constraint.overallPass;
-      if (!constraint.overallPass) {
-        blockers.push(`下单限制预检失败: ${constraint.chineseMessage}`);
+      const { runSafeExecutionDecision } = await import("../execution/safeExecutionOrchestrator");
+      const decision = await runSafeExecutionDecision(input);
+      constraintPrecheckPassed = decision.orderConstraintPass;
+      capitalPrecheckPassed = decision.capitalPrecheckPass;
+
+      // 记录 orchestrator evidence
+      orchestratorState = decision.state;
+      orchestratorBlockers = decision.blockers;
+
+      if (decision.state === "BLOCKED") {
+        for (const b of decision.blockers) blockers.push(b);
+      } else if (decision.state === "TRANSFER_REQUIRED") {
+        blockers.push("需要自动内部划转，划转完成并重新审计前不能下单");
+      } else if (decision.state === "FROZEN" || decision.state === "MANUAL_INTERVENTION_REQUIRED") {
+        blockers.push("系统状态异常，需要人工介入");
       }
     } catch (err: any) {
       constraintPrecheckPassed = false;
-      blockers.push(`下单限制预检异常: ${err.message}`);
-    }
-
-    try {
-      const { runCapitalPrecheck } = await import("../execution/capitalPrecheck");
-      const capital = await runCapitalPrecheck(exchange, symbol, notional);
-      capitalPrecheckPassed = capital.passBeforeTransfer;
-      if (!capital.passBeforeTransfer) {
-        blockers.push(`资金预检失败: ${capital.blockReason}`);
-      }
-    } catch (err: any) {
       capitalPrecheckPassed = false;
-      blockers.push(`资金预检异常: ${err.message}`);
+      blockers.push(`安全决策异常: ${err.message}`);
     }
   }
 
@@ -139,6 +147,7 @@ export async function runFinalPreExecutionAudit(): Promise<FinalAuditResult> {
       secretExposureCheck: secretOk ? "passed" : "failed",
       runbookExists: runbookOk, checklistExists: checklistOk,
       capitalPrecheckPassed, constraintPrecheckPassed,
+      orchestratorState,
     },
     chineseMessage: blockers.length === 0
       ? "系统具备申请 10U 手动验证的条件，但当前不会真实下单。没有项目方单独批准，不允许进入 M9 actual execution。"

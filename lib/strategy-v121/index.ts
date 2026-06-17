@@ -36,6 +36,7 @@ export * from "./execution/paperStore";
 export * from "./execution/orderIntent";
 export * from "./execution/orderConstraintPrecheck";
 export * from "./execution/capitalPrecheck";
+export * from "./execution/safeExecutionOrchestrator";
 
 export * from "./mainnetTiny/mainnetTinyGate";
 export * from "./mainnetTiny/mainnetTinyPreflight";
