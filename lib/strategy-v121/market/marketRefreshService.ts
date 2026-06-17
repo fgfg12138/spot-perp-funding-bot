@@ -1,8 +1,3 @@
-/**
- * 市场行情刷新服务 — 遍历 universe → 调用 adapter → 构建 MarketSnapshot → 扫描 → 持久化。
- *
- * 不下单，不改账户，只读。在 READ_ONLY / PAPER / SHADOW 下均可安全运行。
- */
 import type { ExchangeId, MarketSnapshot } from "../domain/types";
 import { V121_UNIVERSE, CONSERVATIVE_UNIVERSE, canonicalToExchange } from "./symbolMap";
 import { discoverSameExchangeUniverse } from "./universeDiscovery";
@@ -41,133 +36,122 @@ export interface MarketRefreshResult {
 
 export async function refreshAndScan(input: {
   plannedNotional: number;
-  makerRate: number;
-  takerRate: number;
-  isTakerEntry: boolean;
-  systemHealthy: boolean;
+  makerRate: number; takerRate: number;
+  isTakerEntry: boolean; systemHealthy: boolean;
   symbols?: string[];
   useDynamicUniverse?: boolean;
+  scanMode?: "fixed_universe" | "dynamic_same_exchange";
+  maxDynamicSymbolsPerExchange?: number;
 }): Promise<MarketRefreshResult> {
   const now = Date.now();
-  const rawSymbols = input.symbols;
-  let symbols: string[];
-  if (rawSymbols !== undefined && rawSymbols !== null) {
-    symbols = rawSymbols;
-  } else if (input.useDynamicUniverse) {
-    const dynamic = await discoverSameExchangeUniverse();
-    symbols = [...new Set(dynamic.filter(d => d.eligibleForScan).map(d => d.symbol))];
-  } else {
-    symbols = V121_UNIVERSE;
-  }
-  const exchanges: ExchangeId[] = ["binance", "okx", "htx"];
-  const errors: MarketRefreshResult["errors"] = [];
   const spotMap = new Map<string, MarketSnapshot>();
   const perpMap = new Map<string, MarketSnapshot>();
+  const errors: MarketRefreshResult["errors"] = [];
+  let dynamicCount = 0;
 
-  const safeFetch = async (
-    ex: ExchangeId, adapter: UnifiedAdapter, rawSym: string,
-    canonical: string, marketType: "spot" | "perp",
-  ) => {
-    try {
-      if (marketType === "perp" && ex === "htx") {
-        // HTX perp uses swap endpoints
-        const htxTicker = await (adapter as any).fetchTickerSwap(rawSym);
-        const htxOb = await (adapter as any).fetchOrderBookSwap(rawSym, 10);
-        let htxFunding;
-        try { htxFunding = await (adapter as any).fetchFundingInfo(rawSym); } catch { /* optional */ }
-        const snap = buildMarketSnapshot(ex, canonical, "perp", htxTicker, htxOb, htxFunding ?? undefined);
-        perpMap.set(`${ex}:${canonical}`, snap);
-        return;
-      }
+  // Dynamic same-exchange scan
+  if (input.useDynamicUniverse) {
+    const dynamic = await discoverSameExchangeUniverse();
+    const eligible = dynamic.filter(d => d.eligibleForScan);
+    const maxPerEx = input.maxDynamicSymbolsPerExchange ?? 50;
+    dynamicCount = eligible.length;
 
-      // Standard path
-      const ticker = await adapter.fetchTicker(rawSym);
-      const ob = await adapter.fetchOrderBook(rawSym, 10);
-      let funding;
-      if (marketType === "perp" && adapter.fetchFundingInfo) {
-        try { funding = await adapter.fetchFundingInfo(rawSym); } catch { /* optional */ }
-      }
-      const snap = buildMarketSnapshot(ex, canonical, marketType, ticker, ob, funding ?? undefined);
-      if (marketType === "spot") spotMap.set(`${ex}:${canonical}`, snap);
-      else perpMap.set(`${ex}:${canonical}`, snap);
-    } catch (err) {
-      errors.push({ exchange: ex, symbol: canonical, error: (err as Error).message });
-    }
-  };
-
-  for (const canonical of symbols) {
-    const tasks: Promise<void>[] = [];
-    for (const ex of exchanges) {
+    for (const ex of ["binance", "okx"] as ExchangeId[]) {
+      const items = eligible.filter(i => i.exchange === ex).slice(0, maxPerEx);
       const adapter = getAdapter(ex);
-      const spotSym = canonicalToExchange(canonical, ex, "spot");
-      const perpSym = canonicalToExchange(canonical, ex, "perp");
-      tasks.push(safeFetch(ex, adapter, spotSym, canonical, "spot"));
-      tasks.push(safeFetch(ex, adapter, perpSym, canonical, "perp"));
+      for (const item of items) {
+        try {
+          const ticker = await adapter.fetchTicker(item.spotSymbol);
+          const ob = await adapter.fetchOrderBook(item.spotSymbol, 10);
+          const snap = buildMarketSnapshot(ex, item.symbol, "spot", ticker, ob);
+          spotMap.set(`${ex}:${item.symbol}`, snap);
+        } catch (err: any) {
+          errors.push({ exchange: ex, symbol: item.symbol, error: err.message });
+        }
+        try {
+          if (ex === "htx") {
+            const htxTicker = await (adapter as any).fetchTickerSwap(item.perpSymbol);
+            const htxOb = await (adapter as any).fetchOrderBookSwap(item.perpSymbol, 10);
+            const snap = buildMarketSnapshot(ex, item.symbol, "perp", htxTicker, htxOb);
+            perpMap.set(`${ex}:${item.symbol}`, snap);
+          } else {
+            const ticker = await adapter.fetchTicker(item.perpSymbol);
+            const ob = await adapter.fetchOrderBook(item.perpSymbol, 10);
+            let funding;
+            try { funding = await adapter.fetchFundingInfo!(item.perpSymbol); } catch {}
+            const snap = buildMarketSnapshot(ex, item.symbol, "perp", ticker, ob, funding);
+            perpMap.set(`${ex}:${item.symbol}`, snap);
+          }
+        } catch (err: any) {
+          errors.push({ exchange: ex, symbol: item.symbol, error: err.message });
+        }
+      }
     }
-    await Promise.all(tasks);
+  } else {
+    // Fixed universe scan
+    const symbols = input.symbols !== undefined && input.symbols !== null
+      ? input.symbols : V121_UNIVERSE;
+    const exchanges: ExchangeId[] = ["binance", "okx", "htx"];
+
+    for (const canonical of symbols) {
+      for (const ex of exchanges) {
+        const adapter = getAdapter(ex);
+        const spotSym = canonicalToExchange(canonical, ex, "spot");
+        const perpSym = canonicalToExchange(canonical, ex, "perp");
+        try {
+          const ticker = await adapter.fetchTicker(spotSym);
+          const ob = await adapter.fetchOrderBook(spotSym, 10);
+          spotMap.set(`${ex}:${canonical}`, buildMarketSnapshot(ex, canonical, "spot", ticker, ob));
+        } catch (err: any) { errors.push({ exchange: ex, symbol: canonical, error: err.message }); }
+        try {
+          if (ex === "htx") {
+            const htxTicker = await (adapter as any).fetchTickerSwap(perpSym);
+            const htxOb = await (adapter as any).fetchOrderBookSwap(perpSym, 10);
+            perpMap.set(`${ex}:${canonical}`, buildMarketSnapshot(ex, canonical, "perp", htxTicker, htxOb));
+          } else {
+            const ticker = await adapter.fetchTicker(perpSym);
+            const ob = await adapter.fetchOrderBook(perpSym, 10);
+            let funding;
+            try { funding = await adapter.fetchFundingInfo?.(perpSym); } catch {}
+            perpMap.set(`${ex}:${canonical}`, buildMarketSnapshot(ex, canonical, "perp", ticker, ob, funding));
+          }
+        } catch (err: any) { errors.push({ exchange: ex, symbol: canonical, error: err.message }); }
+      }
+    }
   }
 
   const scanResult = scanOpportunities({
-    spotSnapshots: spotMap,
-    perpSnapshots: perpMap,
-    systemHealthy: input.systemHealthy,
-    activeCooldowns: [],
+    spotSnapshots: spotMap, perpSnapshots: perpMap,
+    systemHealthy: input.systemHealthy, activeCooldowns: [],
     plannedNotional: input.plannedNotional,
-    makerRate: input.makerRate,
-    takerRate: input.takerRate,
-    isTakerEntry: input.isTakerEntry,
+    makerRate: input.makerRate, takerRate: input.takerRate,
+    isTakerEntry: input.isTakerEntry, scanMode: input.scanMode,
   });
 
-  // 持久化 — 展开 OpportunityRecord 为 SQLite 平面列
+  // Persist
   for (const opp of scanResult.opportunities) {
     repo().save("opportunity_records", {
-      id: opp.id,
-      discovered_at_utc: opp.discoveredAtUtc,
+      id: opp.id, discovered_at_utc: opp.discoveredAtUtc,
       discovered_at_utc8: new Date(opp.discoveredAtUtc).toISOString(),
-      symbol: opp.path?.symbol ?? "",
-      spot_exchange: opp.path?.spotExchange ?? "",
+      symbol: opp.path?.symbol ?? "", spot_exchange: opp.path?.spotExchange ?? "",
       perp_exchange: opp.path?.perpExchange ?? "",
-      funding_8h: opp.funding8h,
-      entry_basis: opp.entryExecutableBasis,
-      exit_basis: opp.riskMarkBasis,
-      spot_depth: opp.spotDepth,
-      perp_depth: opp.perpDepth,
-      score: opp.score,
-      level: opp.level,
-      passed: opp.passed ? 1 : 0,
+      funding_8h: opp.funding8h, entry_basis: opp.entryExecutableBasis,
+      exit_basis: opp.riskMarkBasis, spot_depth: opp.spotDepth, perp_depth: opp.perpDepth,
+      score: opp.score, level: opp.level, passed: opp.passed ? 1 : 0,
       reject_reason: JSON.stringify(opp.rejectReasons),
-      raw_snapshot_json: JSON.stringify({
-        warnings: opp.warnings,
-        nextAction: opp.nextAction,
-        dataSource: "real_market",
-        scannedAtUtc: now,
-      }),
+      raw_snapshot_json: JSON.stringify({ dataSource: scanResult.dataSource, scannedAtUtc: now }),
     } as any);
   }
 
-  // 缓存最新扫描结果
-  const scanRejectSummary: Record<string, number> = {};
-  for (const opp of scanResult.opportunities) {
-    for (const r of opp.rejectReasons) {
-      scanRejectSummary[r.rule] = (scanRejectSummary[r.rule] ?? 0) + 1;
-    }
-  }
+  const rejectSummary: Record<string, number> = scanResult.rejectSummary ?? {};
   saveLatestScan({
-    opportunities: scanResult.opportunities,
-    totalPaths: scanResult.totalPaths,
-    passedCount: scanResult.passedCount,
-    rejectedCount: scanResult.rejectedCount,
-    rejectSummary: scanRejectSummary,
-    errors: errors.map(e => ({ exchange: e.exchange, symbol: e.symbol, error: e.error })),
-    dataSource: "real_market",
-    scannedAtUtc: scanResult.scannedAtUtc,
-    durationMs: Date.now() - now,
-    symbolsScanned: symbols.length,
-    exchangesScanned: exchanges.length,
+    opportunities: scanResult.opportunities, totalPaths: scanResult.totalPaths,
+    passedCount: scanResult.passedCount, rejectedCount: scanResult.rejectedCount,
+    rejectSummary, errors: errors.map(e => ({ exchange: e.exchange, symbol: e.symbol, error: e.error })),
+    dataSource: scanResult.dataSource, scannedAtUtc: scanResult.scannedAtUtc,
+    durationMs: Date.now() - now, symbolsScanned: dynamicCount || (input.symbols?.length ?? V121_UNIVERSE.length),
+    exchangesScanned: input.useDynamicUniverse ? 2 : 3,
   });
 
-  return {
-    spotSnapshots: spotMap, perpSnapshots: perpMap,
-    errors, scanResult, refreshedAtUtc: now,
-  };
+  return { spotSnapshots: spotMap, perpSnapshots: perpMap, errors, scanResult, refreshedAtUtc: now };
 }

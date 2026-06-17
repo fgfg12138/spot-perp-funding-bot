@@ -13,7 +13,8 @@ export async function POST() {
       plannedNotional: config.plannedNotional,
       makerRate: config.makerRate, takerRate: config.takerRate,
       isTakerEntry: false, systemHealthy: true,
-      useDynamicUniverse: true, // 默认使用动态池
+      useDynamicUniverse: true,
+      scanMode: "dynamic_same_exchange",
     });
     const elapsed = Date.now() - t0;
 

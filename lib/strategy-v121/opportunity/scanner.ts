@@ -15,6 +15,7 @@ export interface ScannerInput {
   makerRate: number;
   takerRate: number;
   isTakerEntry: boolean;
+  scanMode?: "fixed_universe" | "dynamic_same_exchange";
 }
 
 export interface ScannerOutput {
@@ -34,6 +35,9 @@ export function scanOpportunities(input: ScannerInput): ScannerOutput {
   const paths = generateAllPaths();
 
   for (const path of paths) {
+    // 动态同所模式：跳过跨所路径
+    if (input.scanMode === "dynamic_same_exchange" && path.spotExchange !== path.perpExchange) continue;
+
     const spotKey = `${path.spotExchange}:${path.symbol}`;
     const perpKey = `${path.perpExchange}:${path.symbol}`;
     const spotSnap = input.spotSnapshots.get(spotKey);
