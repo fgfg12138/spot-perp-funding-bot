@@ -51,7 +51,7 @@ export default function FinalAuditPage() {
             <div key={k} className="flex justify-between border-b border-gray-800 py-1">
               <span className="text-gray-400">{k}</span>
               <span className="text-gray-200 font-mono text-xs">
-                {typeof v === "boolean" ? (v ? "✅" : "❌") : v === undefined ? "—" : String(v)}
+                {typeof v === "boolean" ? (v ? "✅" : "❌") : v === undefined || v === null ? "—" : typeof v === "object" ? JSON.stringify(v).slice(0, 200) : String(v)}
               </span>
             </div>
           ))}
