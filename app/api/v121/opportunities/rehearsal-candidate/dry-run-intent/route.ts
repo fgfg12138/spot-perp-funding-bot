@@ -1,11 +1,16 @@
 import { NextResponse } from "next/server";
-import { selectLeastLossRehearsalCandidate } from "@/lib/strategy-v121/opportunity/leastLossRehearsalSelector";
-import { createOrderIntent } from "@/lib/strategy-v121/execution/orderIntent";
 
 export async function POST() {
   try {
+    const { selectLeastLossRehearsalCandidate } = await import(
+      "@/lib/strategy-v121/opportunity/leastLossRehearsalSelector"
+    );
+    const { createOrderIntent } = await import(
+      "@/lib/strategy-v121/execution/orderIntent"
+    );
+
     const candidate = selectLeastLossRehearsalCandidate();
-    if (!candidate) return NextResponse.json({ error: "无可用模拟候选" }, { status: 404 });
+    if (!candidate) return NextResponse.json({ error: "无可用模拟候选，请先触发扫描" }, { status: 404 });
 
     const intent = createOrderIntent({
       symbol: candidate.symbol,
@@ -24,7 +29,7 @@ export async function POST() {
     });
   } catch (err: any) {
     return NextResponse.json(
-      { error: "生成 dry-run intent 失败", detail: err.message, stack: String(err.stack).slice(0, 300) },
+      { error: "生成失败", detail: err.message ?? String(err) },
       { status: 500 },
     );
   }
