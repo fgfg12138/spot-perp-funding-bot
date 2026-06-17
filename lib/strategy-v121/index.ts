@@ -30,8 +30,13 @@ export * from "./execution/deviation";
 export * from "./execution/shortLegRepair";
 export * from "./execution/paperLifecycle";
 export * from "./execution/paperStore";
+export * from "./execution/orderIntent";
+
+export * from "./mainnetTiny/mainnetTinyGate";
+export * from "./mainnetTiny/mainnetTinyPreflight";
 
 export * from "./position/exitRules";
+export * from "./position/monitor";
 export * from "./position/monitor";
 
 export * from "./risk/comboPnl";
@@ -61,5 +66,9 @@ export * from "./persistence/schema";
 export * from "./persistence/repositories";
 export * from "./persistence/repositoryTypes";
 export * from "./persistence/fileSystemRepository";
+export * from "./persistence/persistenceMode";
+export * from "./persistence/sqliteSchema";
+export * from "./persistence/sqliteRepository";
+export * from "./persistence/repositoryFactory";
 
 export * from "./config/strategyConfig";

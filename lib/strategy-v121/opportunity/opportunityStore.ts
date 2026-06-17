@@ -4,9 +4,10 @@
  * ⚠️ DEV-ONLY: JSONL 持久化，不适用于 MAINNET_TINY。
  */
 import { FileSystemRepository } from "../persistence/fileSystemRepository";
+import { getRepository } from "../persistence/repositoryFactory";
 import * as path from "node:path";
 
-const repo = new FileSystemRepository(path.join(process.cwd(), ".v121-data"));
+const repo = getRepository();
 
 export interface LatestScan {
   opportunities: any[];

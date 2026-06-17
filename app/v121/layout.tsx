@@ -9,6 +9,7 @@ const NAV_ITEMS = [
   { href: "/v121/risk-center", label: "风控中心" },
   { href: "/v121/review", label: "复盘中心" },
   { href: "/v121/shadow", label: "SHADOW" },
+  { href: "/v121/mainnet-tiny", label: "主网小资金" },
   { href: "/v121/settings", label: "参数中心" },
 ];
 
