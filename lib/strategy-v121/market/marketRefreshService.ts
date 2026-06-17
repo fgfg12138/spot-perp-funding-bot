@@ -59,7 +59,7 @@ export async function refreshAndScan(input: {
     for (const ex of ["binance", "okx"] as ExchangeId[]) {
       const items = eligible.filter(i => i.exchange === ex).slice(0, maxPerEx);
       const adapter = getAdapter(ex);
-      for (const item of items) {
+      const tasks = items.map(async (item) => {
         try {
           const ticker = await adapter.fetchTicker(item.spotSymbol);
           const ob = await adapter.fetchOrderBook(item.spotSymbol, 10);
@@ -85,7 +85,8 @@ export async function refreshAndScan(input: {
         } catch (err: any) {
           errors.push({ exchange: ex, symbol: item.symbol, error: err.message });
         }
-      }
+      });
+      await Promise.all(tasks);
     }
   } else {
     // Fixed universe scan
