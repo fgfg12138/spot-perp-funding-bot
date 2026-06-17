@@ -96,12 +96,30 @@ export async function refreshAndScan(input: {
     isTakerEntry: input.isTakerEntry,
   });
 
-  // 持久化
+  // 持久化 — 展开 OpportunityRecord 为 SQLite 平面列
   for (const opp of scanResult.opportunities) {
     repo().save("opportunity_records", {
-      ...opp,
-      dataSource: "real_market",
-      scannedAtUtc: now,
+      id: opp.id,
+      discovered_at_utc: opp.discoveredAtUtc,
+      discovered_at_utc8: new Date(opp.discoveredAtUtc).toISOString(),
+      symbol: opp.path?.symbol ?? "",
+      spot_exchange: opp.path?.spotExchange ?? "",
+      perp_exchange: opp.path?.perpExchange ?? "",
+      funding_8h: opp.funding8h,
+      entry_basis: opp.entryExecutableBasis,
+      exit_basis: opp.riskMarkBasis,
+      spot_depth: opp.spotDepth,
+      perp_depth: opp.perpDepth,
+      score: opp.score,
+      level: opp.level,
+      passed: opp.passed ? 1 : 0,
+      reject_reason: JSON.stringify(opp.rejectReasons),
+      raw_snapshot_json: JSON.stringify({
+        warnings: opp.warnings,
+        nextAction: opp.nextAction,
+        dataSource: "real_market",
+        scannedAtUtc: now,
+      }),
     } as any);
   }
 

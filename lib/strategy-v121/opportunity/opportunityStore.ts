@@ -23,12 +23,43 @@ export interface LatestScan {
 
 export function saveLatestScan(scan: LatestScan): void {
   repo().clear("latest_scan");
-  repo().save("latest_scan", scan as any);
+  // Map to snake_case for SQLite compatibility
+  repo().save("latest_scan", {
+    id: `scan-${scan.scannedAtUtc}`,
+    total_paths: scan.totalPaths,
+    passed_count: scan.passedCount,
+    rejected_count: scan.rejectedCount,
+    data_source: scan.dataSource,
+    scanned_at_utc: scan.scannedAtUtc,
+    duration_ms: scan.durationMs,
+    errors_json: JSON.stringify(scan.errors),
+    reject_summary_json: JSON.stringify(scan.rejectSummary),
+  } as any);
 }
 
 export function getLatestScan(): LatestScan | null {
   const all = repo().queryAll("latest_scan");
-  return all.length > 0 ? (all[all.length - 1] as any) : null;
+  if (all.length === 0) return null;
+  const row = all[all.length - 1] as any;
+  return {
+    opportunities: [],
+    totalPaths: row.total_paths ?? row.totalPaths ?? 0,
+    passedCount: row.passed_count ?? row.passedCount ?? 0,
+    rejectedCount: row.rejected_count ?? row.rejectedCount ?? 0,
+    rejectSummary: safeParse(row.reject_summary_json ?? row.rejectSummaryJson, {}),
+    errors: safeParse(row.errors_json ?? row.errorsJson, []),
+    dataSource: row.data_source ?? row.dataSource ?? "no_data",
+    scannedAtUtc: row.scanned_at_utc ?? row.scannedAtUtc ?? 0,
+    durationMs: row.duration_ms ?? row.durationMs ?? 0,
+    symbolsScanned: 5,
+    exchangesScanned: 3,
+  };
+}
+
+function safeParse(v: any, fallback: any): any {
+  if (typeof v === "string") { try { return JSON.parse(v); } catch { return fallback; } }
+  if (v !== undefined && v !== null) return v;
+  return fallback;
 }
 
 export function clearLatestScan(): void {
