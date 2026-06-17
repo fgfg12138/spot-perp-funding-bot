@@ -1,29 +1,54 @@
 import type { ExchangeId } from "../domain/types";
-import { createAccountAdapter } from "../account/adapters/accountAdapterFactory";
 import { isApiKeyConfigured } from "../account/shadowAccountService";
 
 export interface CapitalPrecheckResult {
   exchange: ExchangeId;
   symbol: string;
   plannedNotionalUsdt: number;
+  actualNotionalUsdt: number;
+  totalFreeUsdt: number;
   spotFreeUsdt: number;
   perpFreeUsdt: number;
+  globalReserveUsdt: number;
+  usableCapitalUsdt: number;
+  spotBufferRate: number;
+  perpBufferRate: number;
   spotRequiredUsdt: number;
-  perpRequiredMarginUsdt: number;
-  feeBufferUsdt: number;
-  safetyReserveUsdt: number;
-  maxFeasibleNotionalUsdt: number;
+  perpRequiredUsdt: number;
+  spotShortageUsdt: number;
+  perpShortageUsdt: number;
+  spotSurplusUsdt: number;
+  perpSurplusUsdt: number;
   minRequiredNotionalUsdt: number;
-  pass: boolean;
+  needsAutoTransfer: boolean;
+  autoTransferAllowed: boolean;
+  transferPlan?: {
+    from: "spot" | "perp";
+    to: "spot" | "perp";
+    amountUsdt: number;
+    reason: string;
+  };
+  passBeforeTransfer: boolean;
+  passAfterTransfer?: boolean;
   blockReason?: string;
-  canSuggestReducedSize: boolean;
-  suggestedNotionalUsdt?: number;
   realExecutionAllowed: false;
   chineseMessage: string;
 }
 
-const FEE_BUFFER_RATE = 0.002;
-const SAFETY_RESERVE_RATE = 0.01;
+function getEnvNum(key: string, fallback: number): number {
+  const v = process.env[key];
+  return v ? Number(v) : fallback;
+}
+
+async function readSpotBalance(exchange: ExchangeId): Promise<number | null> {
+  try {
+    const { createAccountAdapter } = await import("../account/adapters/accountAdapterFactory");
+    const { adapter } = createAccountAdapter(exchange);
+    const balances = await adapter.fetchBalances();
+    const usdt = balances.find(b => b.asset === "USDT");
+    return usdt ? usdt.free : 0;
+  } catch { return null; }
+}
 
 async function readFuturesBalance(exchange: ExchangeId): Promise<number | null> {
   try {
@@ -58,83 +83,120 @@ export async function runCapitalPrecheck(
   exchange: ExchangeId, symbol: string, plannedNotionalUsdt: number,
 ): Promise<CapitalPrecheckResult> {
   const noAccess = (reason: string): CapitalPrecheckResult => ({
-    exchange, symbol, plannedNotionalUsdt,
-    spotFreeUsdt: 0, perpFreeUsdt: 0, spotRequiredUsdt: 0, perpRequiredMarginUsdt: 0,
-    feeBufferUsdt: 0, safetyReserveUsdt: 0,
-    maxFeasibleNotionalUsdt: 0, minRequiredNotionalUsdt: 10,
-    pass: false, blockReason: reason, canSuggestReducedSize: false,
-    realExecutionAllowed: false, chineseMessage: `资金预检失败: ${reason}`,
+    exchange, symbol, plannedNotionalUsdt, actualNotionalUsdt: 0,
+    totalFreeUsdt: 0, spotFreeUsdt: 0, perpFreeUsdt: 0,
+    globalReserveUsdt: 0, usableCapitalUsdt: 0,
+    spotBufferRate: 0, perpBufferRate: 0,
+    spotRequiredUsdt: 0, perpRequiredUsdt: 0,
+    spotShortageUsdt: 0, perpShortageUsdt: 0,
+    spotSurplusUsdt: 0, perpSurplusUsdt: 0,
+    minRequiredNotionalUsdt: 10,
+    needsAutoTransfer: false, autoTransferAllowed: false,
+    passBeforeTransfer: false,
+    blockReason: reason, realExecutionAllowed: false,
+    chineseMessage: `资金预检失败: ${reason}`,
   });
 
-  if (!isApiKeyConfigured(exchange)) {
-    return noAccess(`${exchange} API Key 未配置`);
-  }
+  if (!isApiKeyConfigured(exchange)) return noAccess(`${exchange} API Key 未配置`);
 
-  // 读现货余额
-  const { adapter } = createAccountAdapter(exchange);
-  let spotFree = 0;
-  try {
-    const balances = await adapter.fetchBalances();
-    const usdt = balances.find(b => b.asset === "USDT");
-    if (usdt) spotFree = usdt.free;
-  } catch {
-    return noAccess("无法读取现货账户余额");
-  }
+  const spotFree = await readSpotBalance(exchange);
+  if (spotFree === null) return noAccess("无法读取现货账户余额");
 
-  // 读合约可用保证金 — 不能估算
   const perpFree = await readFuturesBalance(exchange);
-  if (perpFree === null) {
-    return noAccess("无法读取合约账户可用保证金，禁止进入真实执行");
-  }
+  if (perpFree === null) return noAccess("无法读取合约账户可用保证金，禁止进入真实执行");
 
-  const feeBuffer = plannedNotionalUsdt * FEE_BUFFER_RATE;
-  const safetyReserve = plannedNotionalUsdt * SAFETY_RESERVE_RATE;
-  const spotRequired = plannedNotionalUsdt + feeBuffer + safetyReserve;
-  const perpRequired = plannedNotionalUsdt + feeBuffer + safetyReserve;
-  const maxFeasible = Math.min(
-    Math.max(0, spotFree - safetyReserve - feeBuffer),
-    Math.max(0, perpFree - safetyReserve - feeBuffer),
-  );
+  const totalFree = spotFree + perpFree;
+
+  // 全局冗余
+  const globalReserveRate = getEnvNum("V121_GLOBAL_RESERVE_RATE", 0.20);
+  const minGlobalReserve = getEnvNum("V121_MIN_GLOBAL_RESERVE_USDT", 10);
+  const globalReserve = Math.max(minGlobalReserve, totalFree * globalReserveRate);
+  const usableCapital = Math.max(0, totalFree - globalReserve);
+
+  // 缓冲
+  const spotBufferRate = getEnvNum("V121_SPOT_BUFFER_RATE", 0.015);
+  const perpBufferRate = getEnvNum("V121_PERP_BUFFER_RATE", 0.035);
+
+  // actualNotional = min(planned, usableCapital / (2 + buffers))
+  const divisor = 2 + spotBufferRate + perpBufferRate;
+  const safeMaxNotional = usableCapital / divisor;
+  const actualNotional = Math.min(plannedNotionalUsdt, safeMaxNotional);
+
   const minRequired = 10;
-  const allowDownsize = process.env.V121_ALLOW_AUTO_DOWNSIZE === "true";
-
-  if (spotFree < spotRequired) {
-    return noAccess(`现货 USDT 不足: 可用 ${spotFree.toFixed(2)}U，需 ${spotRequired.toFixed(2)}U`);
-  }
-  if (perpFree < perpRequired) {
-    return noAccess(`合约保证金不足: 可用 ${perpFree.toFixed(2)}U，需 ${perpRequired.toFixed(2)}U`);
-  }
-  if (maxFeasible < minRequired) {
-    return noAccess(`最大可行 ${maxFeasible.toFixed(2)}U < 最小要求 ${minRequired}U`);
+  if (actualNotional < minRequired) {
+    return noAccess(`扣除冗余后可下单金额 ${actualNotional.toFixed(2)}U < 最小 ${minRequired}U，放弃机会`);
   }
 
-  if (maxFeasible < plannedNotionalUsdt) {
-    const suggested = Math.floor(maxFeasible);
-    if (allowDownsize) {
-      return {
-        exchange, symbol, plannedNotionalUsdt,
-        spotFreeUsdt: spotFree, perpFreeUsdt: perpFree,
-        spotRequiredUsdt: spotRequired, perpRequiredMarginUsdt: perpRequired,
-        feeBufferUsdt: feeBuffer, safetyReserveUsdt: safetyReserve,
-        maxFeasibleNotionalUsdt: maxFeasible, minRequiredNotionalUsdt: minRequired,
-        pass: false,
-        blockReason: `资金不足计划 ${plannedNotionalUsdt}U，建议降为 ${suggested}U（需人工确认并重新审计）`,
-        canSuggestReducedSize: true, suggestedNotionalUsdt: suggested,
-        realExecutionAllowed: false,
-        chineseMessage: `资金不足，建议降为 ${suggested}U 后重新审计`,
-      };
+  // 两边需求
+  const spotRequired = actualNotional * (1 + spotBufferRate);
+  const perpRequired = actualNotional * (1 + perpBufferRate);
+
+  const spotShortage = Math.max(0, spotRequired - spotFree);
+  const perpShortage = Math.max(0, perpRequired - perpFree);
+  const spotSurplus = Math.max(0, spotFree - spotRequired);
+  const perpSurplus = Math.max(0, perpFree - perpRequired);
+
+  const allowTransfer = getEnvNum("V121_ALLOW_AUTO_TRANSFER", 0) === 1 || process.env.V121_ALLOW_AUTO_TRANSFER === "true";
+  const transferMax = getEnvNum("V121_AUTO_TRANSFER_MAX_USDT", 50);
+
+  let transferPlan: CapitalPrecheckResult["transferPlan"] | undefined;
+  let needsTransfer = false;
+  let transferOk = false;
+
+  if (perpShortage > 0 && spotSurplus >= perpShortage) {
+    const amount = Math.min(perpShortage, transferMax);
+    needsTransfer = true;
+    if (allowTransfer && amount <= transferMax) {
+      transferPlan = { from: "spot", to: "perp", amountUsdt: Math.round(amount * 100) / 100, reason: `合约侧缺 ${perpShortage.toFixed(2)}U，现货侧盈余 ${spotSurplus.toFixed(2)}U` };
+      transferOk = true;
+    } else {
+      transferPlan = { from: "spot", to: "perp", amountUsdt: Math.round(amount * 100) / 100, reason: `需要划转 ${amount.toFixed(2)}U 但超过上限 ${transferMax}U 或自动划转未开启` };
     }
-    return noAccess(`资金不足: 计划 ${plannedNotionalUsdt}U，最多 ${maxFeasible.toFixed(2)}U。不允许自动缩仓。`);
+  } else if (spotShortage > 0 && perpSurplus >= spotShortage) {
+    const amount = Math.min(spotShortage, transferMax);
+    needsTransfer = true;
+    if (allowTransfer && amount <= transferMax) {
+      transferPlan = { from: "perp", to: "spot", amountUsdt: Math.round(amount * 100) / 100, reason: `现货侧缺 ${spotShortage.toFixed(2)}U，合约侧盈余 ${perpSurplus.toFixed(2)}U` };
+      transferOk = true;
+    } else {
+      transferPlan = { from: "perp", to: "spot", amountUsdt: Math.round(amount * 100) / 100, reason: `需要划转 ${amount.toFixed(2)}U 但超过上限 ${transferMax}U 或自动划转未开启` };
+    }
+  }
+
+  const passBefore = spotShortage === 0 && perpShortage === 0;
+  const passAfter = transferOk;
+
+  let blockReason: string | undefined;
+  let chineseMessage: string;
+  if (passBefore) {
+    chineseMessage = `资金预检通过: 现货 ${spotFree.toFixed(2)}U，合约 ${perpFree.toFixed(2)}U，实际执行 ${actualNotional.toFixed(2)}U`;
+  } else if (needsTransfer && transferOk) {
+    chineseMessage = `需要内部划转 ${transferPlan!.amountUsdt.toFixed(2)}U (${transferPlan!.from}→${transferPlan!.to})，划转后重新审计`;
+    blockReason = `需要自动内部划转，划转完成并重新审计前不能下单`;
+  } else if (needsTransfer) {
+    chineseMessage = `资金不足且无法自动划转: ${transferPlan?.reason ?? ""}`;
+    blockReason = transferPlan?.reason ?? "资金不足";
+  } else {
+    const reasons: string[] = [];
+    if (spotShortage > 0) reasons.push(`现货缺 ${spotShortage.toFixed(2)}U`);
+    if (perpShortage > 0) reasons.push(`合约缺 ${perpShortage.toFixed(2)}U`);
+    chineseMessage = `资金不足: ${reasons.join("，")}`;
+    blockReason = chineseMessage;
   }
 
   return {
-    exchange, symbol, plannedNotionalUsdt,
-    spotFreeUsdt: spotFree, perpFreeUsdt: perpFree,
-    spotRequiredUsdt: spotRequired, perpRequiredMarginUsdt: perpRequired,
-    feeBufferUsdt: feeBuffer, safetyReserveUsdt: safetyReserve,
-    maxFeasibleNotionalUsdt: maxFeasible, minRequiredNotionalUsdt: minRequired,
-    pass: true,
-    canSuggestReducedSize: false, realExecutionAllowed: false,
-    chineseMessage: `资金预检通过: 现货 ${spotFree.toFixed(2)}U，合约 ${perpFree.toFixed(2)}U`,
+    exchange, symbol, plannedNotionalUsdt, actualNotionalUsdt: actualNotional,
+    totalFreeUsdt: totalFree, spotFreeUsdt: spotFree, perpFreeUsdt: perpFree,
+    globalReserveUsdt: globalReserve, usableCapitalUsdt: usableCapital,
+    spotBufferRate, perpBufferRate,
+    spotRequiredUsdt: spotRequired, perpRequiredUsdt: perpRequired,
+    spotShortageUsdt: spotShortage, perpShortageUsdt: perpShortage,
+    spotSurplusUsdt: spotSurplus, perpSurplusUsdt: perpSurplus,
+    minRequiredNotionalUsdt: minRequired,
+    needsAutoTransfer: needsTransfer, autoTransferAllowed: transferOk,
+    transferPlan,
+    passBeforeTransfer: passBefore, passAfterTransfer: passAfter,
+    blockReason, realExecutionAllowed: false,
+    chineseMessage,
   };
 }

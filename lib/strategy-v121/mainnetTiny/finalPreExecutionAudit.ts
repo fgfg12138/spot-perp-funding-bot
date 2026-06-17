@@ -104,8 +104,8 @@ export async function runFinalPreExecutionAudit(): Promise<FinalAuditResult> {
     try {
       const { runCapitalPrecheck } = await import("../execution/capitalPrecheck");
       const capital = await runCapitalPrecheck(exchange, symbol, notional);
-      capitalPrecheckPassed = capital.pass;
-      if (!capital.pass) {
+      capitalPrecheckPassed = capital.passBeforeTransfer;
+      if (!capital.passBeforeTransfer) {
         blockers.push(`资金预检失败: ${capital.blockReason}`);
       }
     } catch (err: any) {
