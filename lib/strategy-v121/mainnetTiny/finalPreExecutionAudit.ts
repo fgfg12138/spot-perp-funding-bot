@@ -22,11 +22,13 @@ export interface FinalAuditResult {
     blockedAttemptsCount: number;
     secretExposureCheck: string;
     runbookExists: boolean; checklistExists: boolean;
+    capitalPrecheckPassed?: boolean;
+    constraintPrecheckPassed?: boolean;
   };
   chineseMessage: string;
 }
 
-export function runFinalPreExecutionAudit(): FinalAuditResult {
+export async function runFinalPreExecutionAudit(): Promise<FinalAuditResult> {
   const blockers: string[] = [];
   const warnings: string[] = [];
   const repo = getRepository();
@@ -65,6 +67,8 @@ export function runFinalPreExecutionAudit(): FinalAuditResult {
   // 测试阈值告警不能用于真实 10U 验证
   const testAlerts = alerts.filter((a: any) => a.thresholdSource === "test_override" || a.isTestThreshold);
   const realAlerts = alerts.filter((a: any) => !testAlerts.includes(a));
+  let capitalPrecheckPassed: boolean | undefined;
+  let constraintPrecheckPassed: boolean | undefined;
   if (realAlerts.length === 0 && testAlerts.length > 0) {
     blockers.push("当前机会来自测试阈值，不满足正式 0.05% 资金费门槛，不能进入真实 10U 套利验证。");
   } else if (alerts.length === 0) {
@@ -77,6 +81,37 @@ export function runFinalPreExecutionAudit(): FinalAuditResult {
   const latestIntent = intents.length > 0 ? intents[intents.length - 1] : null;
   if (latestIntent?.purpose === "execution_rehearsal" || latestIntent?.simulationOnly === true) {
     blockers.push("当前 dry-run intent 来自亏损最小模拟候选，不满足正式套利规则，不能申请真实 10U 验证。");
+    capitalPrecheckPassed = false;
+    constraintPrecheckPassed = false;
+  } else if (latestIntent) {
+    // 正式 intent → 跑下单限制预检和资金预检
+    const exchange = (latestIntent.spotExchange ?? latestIntent.spot_exchange ?? "binance") as any;
+    const symbol = latestIntent.symbol ?? "BTC/USDT";
+    const notional = Number(latestIntent.plannedNotionalUsdt ?? latestIntent.planned_notional ?? 10);
+
+    try {
+      const { checkOrderConstraint } = await import("../execution/orderConstraintPrecheck");
+      const constraint = await checkOrderConstraint(exchange, symbol, notional);
+      constraintPrecheckPassed = constraint.overallPass;
+      if (!constraint.overallPass) {
+        blockers.push(`下单限制预检失败: ${constraint.chineseMessage}`);
+      }
+    } catch (err: any) {
+      constraintPrecheckPassed = false;
+      blockers.push(`下单限制预检异常: ${err.message}`);
+    }
+
+    try {
+      const { runCapitalPrecheck } = await import("../execution/capitalPrecheck");
+      const capital = await runCapitalPrecheck(exchange, symbol, notional);
+      capitalPrecheckPassed = capital.pass;
+      if (!capital.pass) {
+        blockers.push(`资金预检失败: ${capital.blockReason}`);
+      }
+    } catch (err: any) {
+      capitalPrecheckPassed = false;
+      blockers.push(`资金预检异常: ${err.message}`);
+    }
   }
 
   const blocked = repo.queryAll("blocked_execution_attempts");
@@ -103,6 +138,7 @@ export function runFinalPreExecutionAudit(): FinalAuditResult {
       blockedAttemptsCount: blocked.length,
       secretExposureCheck: secretOk ? "passed" : "failed",
       runbookExists: runbookOk, checklistExists: checklistOk,
+      capitalPrecheckPassed, constraintPrecheckPassed,
     },
     chineseMessage: blockers.length === 0
       ? "系统具备申请 10U 手动验证的条件，但当前不会真实下单。没有项目方单独批准，不允许进入 M9 actual execution。"
