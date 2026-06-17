@@ -29,6 +29,20 @@ export class SqliteRepository {
     for (const sql of getExtraCreateSQL()) {
       this.db.exec(sql);
     }
+    // 兼容旧数据库：补加缺失列
+    this.migrate();
+  }
+
+  private migrate(): void {
+    const patches: Record<string, string[]> = {
+      latest_scan: ["opportunities_json TEXT DEFAULT '[]'"],
+    };
+    for (const [table, columns] of Object.entries(patches)) {
+      for (const col of columns) {
+        const colName = col.split(" ")[0];
+        try { this.db.exec(`ALTER TABLE "${table}" ADD COLUMN ${col}`); } catch {}
+      }
+    }
   }
 
   save(table: string, record: Record<string, unknown>): void {
