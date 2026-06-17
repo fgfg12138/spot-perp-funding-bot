@@ -74,3 +74,4 @@ export * from "./persistence/sqliteRepository";
 export * from "./persistence/repositoryFactory";
 
 export * from "./config/strategyConfig";
+export * from "./config/fundingThresholdPolicy";

@@ -62,7 +62,14 @@ export function runFinalPreExecutionAudit(): FinalAuditResult {
   const alerts = (repo.queryAll("opportunity_alerts") as any[]).filter(
     (a: any) => a.status === "new" || a.status === "acknowledged",
   );
-  if (alerts.length === 0) blockers.push("无有效机会告警");
+  // 测试阈值告警不能用于真实 10U 验证
+  const testAlerts = alerts.filter((a: any) => a.thresholdSource === "test_override" || a.isTestThreshold);
+  const realAlerts = alerts.filter((a: any) => !testAlerts.includes(a));
+  if (realAlerts.length === 0 && testAlerts.length > 0) {
+    blockers.push("当前机会来自测试阈值，不满足正式 0.05% 资金费门槛，不能进入真实 10U 套利验证。");
+  } else if (alerts.length === 0) {
+    blockers.push("无有效机会告警");
+  }
 
   const intents = repo.queryAll("order_intents") as any[];
   if (intents.length === 0) warnings.push("无 dry-run intent 记录");

@@ -7,6 +7,7 @@
 import { getRepository } from "../persistence/repositoryFactory";
 import { getLatestScan } from "./opportunityStore";
 import { isSmallCoin } from "../market/contractSpec";
+import { getFundingThreshold8h } from "../config/fundingThresholdPolicy";
 
 export interface OpportunityAlert {
   id: string;
@@ -24,6 +25,9 @@ export interface OpportunityAlert {
   snapshotHash: string;
   status: "new" | "acknowledged" | "expired" | "converted_to_intent";
   chineseMessage: string;
+  thresholdSource?: "production" | "test_override";
+  threshold8h?: number;
+  isTestThreshold?: boolean;
 }
 
 export function checkForAlerts(): OpportunityAlert[] {
@@ -33,6 +37,7 @@ export function checkForAlerts(): OpportunityAlert[] {
 
   const alerts: OpportunityAlert[] = [];
   const now = Date.now();
+  const { threshold, source } = getFundingThreshold8h("dry_run");
 
   for (const opp of scan.opportunities) {
     const spotEx = opp.path?.spotExchange ?? opp.spotExchange ?? "";
@@ -41,24 +46,39 @@ export function checkForAlerts(): OpportunityAlert[] {
     if (spotEx !== perpEx) continue;
     if (spotEx === "htx" || perpEx === "htx") continue;
     if (isSmallCoin(opp.symbol ?? opp.path?.symbol ?? "")) continue;
-    if (!opp.passed) continue;
-    if (opp.level !== "S" && opp.level !== "A") continue;
-    if ((opp.funding8h ?? 0) < 0.0005) continue;
 
+    const funding8h = opp.funding8h ?? 0;
+
+    // 使用阈值策略
+    if (funding8h < threshold) continue;
+
+    // 生产阈值 + 未通过 → 跳过
+    if (source === "production" && !opp.passed) continue;
+
+    // 测试阈值下允许仅因 funding_too_low 被淘汰的机会
+    if (source === "test_override" && !opp.passed) {
+      const onlyFundingRejected = (opp.rejectReasons ?? []).every((r: any) => r.rule === "funding_too_low");
+      if (!onlyFundingRejected) continue;
+    }
+
+    if (opp.level !== "S" && opp.level !== "A") continue;
+
+    const isTest = source === "test_override";
     const alert: OpportunityAlert = {
       id: `alert-${now}-${Math.random().toString(36).slice(2, 6)}`,
       symbol: opp.symbol ?? opp.path?.symbol ?? "",
       spotExchange: spotEx, perpExchange: perpEx,
-      funding8h: opp.funding8h ?? 0,
-      entryBasis: opp.entryExecutableBasis ?? 0,
-      score: opp.score ?? 0,
-      level: opp.level ?? "C",
+      funding8h, entryBasis: opp.entryExecutableBasis ?? 0,
+      score: opp.score ?? 0, level: opp.level ?? "C",
       riskTags: opp.warnings ?? [],
       detectedAtUtc: now,
       latestScanId: `scan-${scan.scannedAtUtc}`,
       snapshotHash: `${opp.symbol ?? "?"}-${spotEx}-${now}`,
       status: "new",
-      chineseMessage: `发现 ${opp.symbol ?? "?"} ${spotEx} 机会，funding_8h=${((opp.funding8h ?? 0) * 100).toFixed(3)}%，评分 ${opp.score ?? 0}，等级 ${opp.level ?? "?"}`,
+      thresholdSource: source, threshold8h: threshold, isTestThreshold: isTest,
+      chineseMessage: isTest
+        ? `[测试阈值] 发现 ${opp.symbol ?? "?"} ${spotEx} 机会，funding_8h=${(funding8h * 100).toFixed(3)}%（测试门槛 ${(threshold * 100).toFixed(3)}%），仅用于 dry-run 验证`
+        : `发现 ${opp.symbol ?? "?"} ${spotEx} 机会，funding_8h=${(funding8h * 100).toFixed(3)}%，评分 ${opp.score ?? 0}，等级 ${opp.level ?? "?"}`,
     };
     alerts.push(alert);
     repo.save("opportunity_alerts", alert as any);
