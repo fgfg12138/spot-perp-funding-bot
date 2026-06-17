@@ -35,6 +35,7 @@ export * from "./execution/orderIntent";
 
 export * from "./mainnetTiny/mainnetTinyGate";
 export * from "./mainnetTiny/mainnetTinyPreflight";
+export * from "./mainnetTiny/finalPreExecutionAudit";
 
 export * from "./position/exitRules";
 export * from "./position/monitor";
