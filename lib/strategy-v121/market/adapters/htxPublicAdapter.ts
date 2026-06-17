@@ -63,7 +63,7 @@ export class HtxPublicAdapter implements IPublicAdapter {
   /** Fetch swap (perp) ticker from HTX linear swap API */
   async fetchTickerSwap(symbol: string): Promise<RawTicker> {
     const data = await this.fetchJsonSwap(
-      `${SWAP_URL}/linear-swap-api/v1/swap_market/detail/merged?contract_code=${symbol}`
+      `${SWAP_URL}/linear-swap-ex/market/detail/merged?contract_code=${symbol}`
     );
     const tick = data.tick as Record<string, unknown>;
     return {
@@ -92,7 +92,7 @@ export class HtxPublicAdapter implements IPublicAdapter {
   /** Fetch swap (perp) order book */
   async fetchOrderBookSwap(symbol: string, depth: number = 20): Promise<RawOrderBook> {
     const data = await this.fetchJsonSwap(
-      `${SWAP_URL}/linear-swap-api/v1/swap_depth?contract_code=${symbol}&type=step0&depth=${depth}`
+      `${SWAP_URL}/linear-swap-ex/market/depth?contract_code=${symbol}&type=step0`
     );
     const tick = data.tick as Record<string, unknown>;
     return {
