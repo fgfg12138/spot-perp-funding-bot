@@ -11,6 +11,12 @@ export interface HardFilterInput {
   systemHealthy: boolean;
   listedHoursAgo: number;
   perpCanOpen: boolean;
+  options?: {
+    minFundingRate8h?: number;
+    minSpotVolume24hUsdt?: number;
+    minPerpVolume24hUsdt?: number;
+    allowSmallCaps?: boolean;
+  };
 }
 
 export interface HardFilterResult {
@@ -64,9 +70,10 @@ export function evaluateHardFilters(input: HardFilterInput): HardFilterResult {
     rejectReasons.push({ rule: "too_new", detail: `上线不足24小时 (${input.listedHoursAgo.toFixed(1)}h)` });
   }
 
-  // 7. 资金费
-  if (input.funding8h < FUNDING_THRESHOLDS.MIN_FUNDING_8H) {
-    rejectReasons.push({ rule: "funding_too_low", detail: `funding_8h ${(input.funding8h * 100).toFixed(3)}% < 0.05%` });
+  // 7. 资金费（支持用户设置 override）
+  const minFundingRate = input.options?.minFundingRate8h ?? FUNDING_THRESHOLDS.MIN_FUNDING_8H;
+  if (input.funding8h < minFundingRate) {
+    rejectReasons.push({ rule: "funding_too_low", detail: `funding_8h ${(input.funding8h * 100).toFixed(3)}% < ${(minFundingRate * 100).toFixed(3)}%` });
   }
   if (input.funding8h > FUNDING_THRESHOLDS.BLACKLIST_FUNDING_8H) {
     rejectReasons.push({ rule: "funding_blacklist", detail: `funding_8h ${(input.funding8h * 100).toFixed(2)}% > 1.00%，默认黑名单` });

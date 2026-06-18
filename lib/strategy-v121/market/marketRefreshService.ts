@@ -8,7 +8,7 @@ import { buildMarketSnapshot } from "./adapters/types";
 import { scanOpportunities } from "../opportunity/scanner";
 import { saveLatestScan } from "../opportunity/opportunityStore";
 import { getRepository } from "../persistence/repositoryFactory";
-import { getUserStrategySettings } from "../config/userStrategySettings";
+
 
 function repo() { return getRepository(); }
 
@@ -52,7 +52,9 @@ export async function refreshAndScan(input: {
   maxDynamicSymbolsPerExchange?: number;
 }): Promise<MarketRefreshResult> {
   const now = Date.now();
-  const settings = getUserStrategySettings();
+  const { loadSettings } = await import("../settings/userStrategySettingsStore");
+  const settings = await loadSettings();
+
   const plannedNotional = input.plannedNotional ?? settings.notional.plannedNotionalUsdt;
   const spotMap = new Map<string, MarketSnapshot>();
   const perpMap = new Map<string, MarketSnapshot>();
@@ -63,7 +65,7 @@ export async function refreshAndScan(input: {
   const useDynamicUniverse = input.useDynamicUniverse ?? settings.universe.useDynamicUniverse;
   const scanMode: MarketScanMode = useDynamicUniverse
     ? "dynamic_same_exchange"
-    : (input.scanMode ?? settings.universe.scanMode ?? "fixed_universe");
+    : (input.scanMode ?? "fixed_universe");
 
   // Dynamic same-exchange scan
   if (useDynamicUniverse) {

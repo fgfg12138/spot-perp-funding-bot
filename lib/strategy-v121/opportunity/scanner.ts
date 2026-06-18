@@ -5,6 +5,7 @@ import { scoreOpportunity } from "./scoring";
 import { calcNetProfit, type NetProfitInput } from "../profitability/netProfit";
 import { normalizeFunding8h } from "../market/fundingNormalize";
 import { calcEntryExecutableBasis } from "../market/basis";
+import type { UserStrategySettings } from "../settings/userStrategySettings";
 
 export interface ScannerInput {
   spotSnapshots: Map<string, MarketSnapshot>;
@@ -16,7 +17,7 @@ export interface ScannerInput {
   takerRate: number;
   isTakerEntry: boolean;
   scanMode?: "fixed_universe" | "dynamic_same_exchange";
-  settings?: unknown;
+  settings?: UserStrategySettings;
 }
 
 export interface ScannerOutput {
@@ -62,6 +63,12 @@ export function scanOpportunities(input: ScannerInput): ScannerOutput {
       funding8h, plannedNotional: input.plannedNotional,
       isInCooldown, systemHealthy: input.systemHealthy,
       listedHoursAgo: 720, perpCanOpen: true,
+      options: input.settings ? {
+        minFundingRate8h: input.settings.funding.minFundingRate8h,
+        minSpotVolume24hUsdt: input.settings.universe.minSpotVolume24hUsdt,
+        minPerpVolume24hUsdt: input.settings.universe.minPerpVolume24hUsdt,
+        allowSmallCaps: input.settings.universe.allowSmallCaps,
+      } : undefined,
     });
 
     const scoringResult = scoreOpportunity({
