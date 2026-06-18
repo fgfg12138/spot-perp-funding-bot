@@ -8,6 +8,7 @@ import { buildMarketSnapshot } from "./adapters/types";
 import { scanOpportunities } from "../opportunity/scanner";
 import { saveLatestScan } from "../opportunity/opportunityStore";
 import { getRepository } from "../persistence/repositoryFactory";
+import { getUserStrategySettings } from "../config/userStrategySettings";
 
 function repo() { return getRepository(); }
 
@@ -42,7 +43,7 @@ export interface MarketRefreshResult {
 }
 
 export async function refreshAndScan(input: {
-  plannedNotional: number;
+  plannedNotional?: number;
   makerRate: number; takerRate: number;
   isTakerEntry: boolean; systemHealthy: boolean;
   symbols?: string[];
@@ -51,24 +52,36 @@ export async function refreshAndScan(input: {
   maxDynamicSymbolsPerExchange?: number;
 }): Promise<MarketRefreshResult> {
   const now = Date.now();
+  const settings = getUserStrategySettings();
+  const plannedNotional = input.plannedNotional ?? settings.notional.plannedNotionalUsdt;
   const spotMap = new Map<string, MarketSnapshot>();
   const perpMap = new Map<string, MarketSnapshot>();
   const errors: MarketRefreshResult["errors"] = [];
   let dynamicCount = 0;
   const dynamicByExchange: Partial<Record<ExchangeId, number>> = {};
   let dynamicWarnings: string[] = [];
-  const scanMode: MarketScanMode = input.useDynamicUniverse
+  const useDynamicUniverse = input.useDynamicUniverse ?? settings.universe.useDynamicUniverse;
+  const scanMode: MarketScanMode = useDynamicUniverse
     ? "dynamic_same_exchange"
-    : (input.scanMode ?? "fixed_universe");
+    : (input.scanMode ?? settings.universe.scanMode ?? "fixed_universe");
 
   // Dynamic same-exchange scan
-  if (input.useDynamicUniverse) {
+  if (useDynamicUniverse) {
     const dynamic = await discoverSameExchangeUniverse();
     const meta = getUniverseDiscoveryMeta();
     dynamicWarnings = meta.warnings;
 
-    const eligible = dynamic.filter(d => d.eligibleForScan);
-    const maxPerEx = input.maxDynamicSymbolsPerExchange ?? 50;
+    const priority = settings.universe.prioritySymbols;
+    const priorityRank = (symbol: string) => {
+      const idx = priority.indexOf(symbol);
+      return idx >= 0 ? idx : Number.MAX_SAFE_INTEGER;
+    };
+    const eligible = dynamic
+      .filter(d => d.eligibleForScan)
+      .filter(d => settings.universe.symbolWhitelist.length === 0 || settings.universe.symbolWhitelist.includes(d.symbol))
+      .filter(d => !settings.universe.symbolBlacklist.includes(d.symbol))
+      .sort((a, b) => priorityRank(a.symbol) - priorityRank(b.symbol) || Number(b.eligibleForTiny) - Number(a.eligibleForTiny) || a.symbol.localeCompare(b.symbol));
+    const maxPerEx = input.maxDynamicSymbolsPerExchange ?? settings.universe.maxDynamicSymbolsPerExchange;
     dynamicCount = eligible.length;
 
     for (const item of eligible) {
@@ -136,9 +149,10 @@ export async function refreshAndScan(input: {
   const scanResult = scanOpportunities({
     spotSnapshots: spotMap, perpSnapshots: perpMap,
     systemHealthy: input.systemHealthy, activeCooldowns: [],
-    plannedNotional: input.plannedNotional,
+    plannedNotional,
     makerRate: input.makerRate, takerRate: input.takerRate,
     isTakerEntry: input.isTakerEntry, scanMode,
+    settings,
   });
 
   // Persist
@@ -163,7 +177,7 @@ export async function refreshAndScan(input: {
     rejectSummary, errors: errors.map(e => ({ exchange: e.exchange, symbol: e.symbol, error: e.error })),
     dataSource: scanResult.dataSource, scannedAtUtc: scanResult.scannedAtUtc,
     durationMs: Date.now() - now, symbolsScanned: dynamicCount || (input.symbols?.length ?? V121_UNIVERSE.length),
-    exchangesScanned: input.useDynamicUniverse ? Object.keys(dynamicByExchange).length : 3,
+    exchangesScanned: useDynamicUniverse ? Object.keys(dynamicByExchange).length : 3,
   });
 
   return {
