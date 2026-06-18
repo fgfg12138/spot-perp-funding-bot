@@ -79,8 +79,9 @@ export const EXTRA_TABLES: Record<string, string> = {
   USER_STRATEGY_SETTINGS: `
     CREATE TABLE IF NOT EXISTS user_strategy_settings (
       id TEXT PRIMARY KEY,
-      updated_at_utc INTEGER NOT NULL,
-      settings_json TEXT NOT NULL
+      json TEXT NOT NULL,
+      created_at_utc INTEGER NOT NULL,
+      updated_at_utc INTEGER NOT NULL
     );
   `,
 };
@@ -93,5 +94,6 @@ export const ALL_TABLE_NAMES = [
   "opportunity_records", "entry_decisions", "entry_executions",
   "position_snapshots", "funding_settlements", "exit_executions", "final_reviews",
   "paper_executions", "latest_scan", "order_intents",
-  "blocked_execution_attempts", "worker_heartbeat", "user_strategy_settings",
+  "blocked_execution_attempts", "worker_heartbeat",
+  "user_strategy_settings",
 ];

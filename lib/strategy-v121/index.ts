@@ -80,3 +80,5 @@ export * from "./persistence/repositoryFactory";
 
 export * from "./config/strategyConfig";
 export * from "./config/fundingThresholdPolicy";
+export * from "./settings/userStrategySettings";
+export * from "./settings/userStrategySettingsStore";
