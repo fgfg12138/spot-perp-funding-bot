@@ -1,6 +1,6 @@
 import type { ExchangeId, MarketSnapshot } from "../domain/types";
-import { V121_UNIVERSE, CONSERVATIVE_UNIVERSE, canonicalToExchange } from "./symbolMap";
-import { discoverSameExchangeUniverse } from "./universeDiscovery";
+import { V121_UNIVERSE, canonicalToExchange } from "./symbolMap";
+import { discoverSameExchangeUniverse, getUniverseDiscoveryMeta } from "./universeDiscovery";
 import { BinancePublicAdapter } from "./adapters/binancePublicAdapter";
 import { OkxPublicAdapter } from "./adapters/okxPublicAdapter";
 import { HtxPublicAdapter } from "./adapters/htxPublicAdapter";
@@ -26,12 +26,19 @@ function getAdapter(exchangeId: ExchangeId): UnifiedAdapter {
   }
 }
 
+export type MarketScanMode = "fixed_universe" | "dynamic_same_exchange";
+
 export interface MarketRefreshResult {
   spotSnapshots: Map<string, MarketSnapshot>;
   perpSnapshots: Map<string, MarketSnapshot>;
   errors: { exchange: ExchangeId; symbol: string; error: string }[];
   scanResult?: ReturnType<typeof scanOpportunities>;
   refreshedAtUtc: number;
+  scanMode: MarketScanMode;
+  dataSource: string;
+  dynamicUniverseCount: number;
+  dynamicUniverseByExchange: Partial<Record<ExchangeId, number>>;
+  dynamicUniverseWarnings: string[];
 }
 
 export async function refreshAndScan(input: {
@@ -40,7 +47,7 @@ export async function refreshAndScan(input: {
   isTakerEntry: boolean; systemHealthy: boolean;
   symbols?: string[];
   useDynamicUniverse?: boolean;
-  scanMode?: "fixed_universe" | "dynamic_same_exchange";
+  scanMode?: MarketScanMode;
   maxDynamicSymbolsPerExchange?: number;
 }): Promise<MarketRefreshResult> {
   const now = Date.now();
@@ -48,13 +55,25 @@ export async function refreshAndScan(input: {
   const perpMap = new Map<string, MarketSnapshot>();
   const errors: MarketRefreshResult["errors"] = [];
   let dynamicCount = 0;
+  const dynamicByExchange: Partial<Record<ExchangeId, number>> = {};
+  let dynamicWarnings: string[] = [];
+  const scanMode: MarketScanMode = input.useDynamicUniverse
+    ? "dynamic_same_exchange"
+    : (input.scanMode ?? "fixed_universe");
 
   // Dynamic same-exchange scan
   if (input.useDynamicUniverse) {
     const dynamic = await discoverSameExchangeUniverse();
+    const meta = getUniverseDiscoveryMeta();
+    dynamicWarnings = meta.warnings;
+
     const eligible = dynamic.filter(d => d.eligibleForScan);
     const maxPerEx = input.maxDynamicSymbolsPerExchange ?? 50;
     dynamicCount = eligible.length;
+
+    for (const item of eligible) {
+      dynamicByExchange[item.exchange] = (dynamicByExchange[item.exchange] ?? 0) + 1;
+    }
 
     for (const ex of ["binance", "okx"] as ExchangeId[]) {
       const items = eligible.filter(i => i.exchange === ex).slice(0, maxPerEx);
@@ -69,19 +88,12 @@ export async function refreshAndScan(input: {
           errors.push({ exchange: ex, symbol: item.symbol, error: err.message });
         }
         try {
-          if (ex === "htx") {
-            const htxTicker = await (adapter as any).fetchTickerSwap(item.perpSymbol);
-            const htxOb = await (adapter as any).fetchOrderBookSwap(item.perpSymbol, 10);
-            const snap = buildMarketSnapshot(ex, item.symbol, "perp", htxTicker, htxOb);
-            perpMap.set(`${ex}:${item.symbol}`, snap);
-          } else {
-            const ticker = await adapter.fetchTicker(item.perpSymbol);
-            const ob = await adapter.fetchOrderBook(item.perpSymbol, 10);
-            let funding;
-            try { funding = await adapter.fetchFundingInfo!(item.perpSymbol); } catch {}
-            const snap = buildMarketSnapshot(ex, item.symbol, "perp", ticker, ob, funding);
-            perpMap.set(`${ex}:${item.symbol}`, snap);
-          }
+          const ticker = await adapter.fetchTicker(item.perpSymbol);
+          const ob = await adapter.fetchOrderBook(item.perpSymbol, 10);
+          let funding;
+          try { funding = await adapter.fetchFundingInfo?.(item.perpSymbol); } catch {}
+          const snap = buildMarketSnapshot(ex, item.symbol, "perp", ticker, ob, funding);
+          perpMap.set(`${ex}:${item.symbol}`, snap);
         } catch (err: any) {
           errors.push({ exchange: ex, symbol: item.symbol, error: err.message });
         }
@@ -126,7 +138,7 @@ export async function refreshAndScan(input: {
     systemHealthy: input.systemHealthy, activeCooldowns: [],
     plannedNotional: input.plannedNotional,
     makerRate: input.makerRate, takerRate: input.takerRate,
-    isTakerEntry: input.isTakerEntry, scanMode: input.scanMode,
+    isTakerEntry: input.isTakerEntry, scanMode,
   });
 
   // Persist
@@ -140,7 +152,7 @@ export async function refreshAndScan(input: {
       exit_basis: opp.riskMarkBasis, spot_depth: opp.spotDepth, perp_depth: opp.perpDepth,
       score: opp.score, level: opp.level, passed: opp.passed ? 1 : 0,
       reject_reason: JSON.stringify(opp.rejectReasons),
-      raw_snapshot_json: JSON.stringify({ dataSource: scanResult.dataSource, scannedAtUtc: now }),
+      raw_snapshot_json: JSON.stringify({ dataSource: scanResult.dataSource, scannedAtUtc: now, scanMode }),
     } as any);
   }
 
@@ -151,8 +163,19 @@ export async function refreshAndScan(input: {
     rejectSummary, errors: errors.map(e => ({ exchange: e.exchange, symbol: e.symbol, error: e.error })),
     dataSource: scanResult.dataSource, scannedAtUtc: scanResult.scannedAtUtc,
     durationMs: Date.now() - now, symbolsScanned: dynamicCount || (input.symbols?.length ?? V121_UNIVERSE.length),
-    exchangesScanned: input.useDynamicUniverse ? 2 : 3,
+    exchangesScanned: input.useDynamicUniverse ? Object.keys(dynamicByExchange).length : 3,
   });
 
-  return { spotSnapshots: spotMap, perpSnapshots: perpMap, errors, scanResult, refreshedAtUtc: now };
+  return {
+    spotSnapshots: spotMap,
+    perpSnapshots: perpMap,
+    errors,
+    scanResult,
+    refreshedAtUtc: now,
+    scanMode,
+    dataSource: scanResult.dataSource,
+    dynamicUniverseCount: dynamicCount,
+    dynamicUniverseByExchange: dynamicByExchange,
+    dynamicUniverseWarnings: dynamicWarnings,
+  };
 }
