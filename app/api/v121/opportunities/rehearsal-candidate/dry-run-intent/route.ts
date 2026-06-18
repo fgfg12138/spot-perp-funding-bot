@@ -18,13 +18,14 @@ export async function POST() {
       perpExchange: candidate.perpExchange as any,
       plannedNotionalUsdt: 10, batchNo: 1,
       reason: `模拟候选 ${candidate.id}`,
+      dryRun: true,
+      purpose: "execution_rehearsal",
+      simulationOnly: true,
+      realTradeEligible: false,
     });
 
     return NextResponse.json({
       ...intent,
-      purpose: "execution_rehearsal",
-      simulationOnly: true,
-      realTradeEligible: false,
       _message: "仅生成模拟 dry-run intent，未实际下单",
     });
   } catch (err: any) {
