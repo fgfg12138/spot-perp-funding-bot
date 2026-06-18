@@ -32,12 +32,12 @@ export function scanOpportunities(input: ScannerInput): ScannerOutput {
   const now = Date.now();
   const opportunities: OpportunityRecord[] = [];
   const rejectSummary: Record<string, number> = {};
-  const paths = generateAllPaths();
+  const scanMode = input.scanMode ?? "fixed_universe";
+  const paths = scanMode === "dynamic_same_exchange"
+    ? generateDynamicSameExchangePaths(input.spotSnapshots, input.perpSnapshots)
+    : generateAllPaths();
 
   for (const path of paths) {
-    // 动态同所模式：跳过跨所路径
-    if (input.scanMode === "dynamic_same_exchange" && path.spotExchange !== path.perpExchange) continue;
-
     const spotKey = `${path.spotExchange}:${path.symbol}`;
     const perpKey = `${path.perpExchange}:${path.symbol}`;
     const spotSnap = input.spotSnapshots.get(spotKey);
@@ -123,9 +123,41 @@ export function scanOpportunities(input: ScannerInput): ScannerOutput {
     totalPaths: paths.length,
     passedCount: passed.length,
     rejectedCount: opportunities.length - passed.length,
-    dataSource: "real_market",
+    dataSource: scanMode === "dynamic_same_exchange" ? "dynamic_same_exchange_universe" : "real_market",
     rejectSummary,
   };
+}
+
+export function generateDynamicSameExchangePaths(
+  spotSnapshots: Map<string, MarketSnapshot>,
+  perpSnapshots: Map<string, MarketSnapshot>,
+): ArbitragePath[] {
+  const paths: ArbitragePath[] = [];
+  const seen = new Set<string>();
+
+  for (const spotKey of spotSnapshots.keys()) {
+    const [exchange, ...symbolParts] = spotKey.split(":");
+    const symbol = symbolParts.join(":");
+    if (!exchange || !symbol) continue;
+    if (exchange === "htx") continue;
+
+    const ex = exchange as ExchangeId;
+    const perpKey = `${ex}:${symbol}`;
+    if (!perpSnapshots.has(perpKey)) continue;
+
+    const pathKey = `${ex}:${symbol}`;
+    if (seen.has(pathKey)) continue;
+    seen.add(pathKey);
+
+    paths.push({
+      symbol,
+      spotExchange: ex,
+      perpExchange: ex,
+      isCrossExchange: false,
+    });
+  }
+
+  return paths;
 }
 
 export function generateAllPaths(): ArbitragePath[] {
