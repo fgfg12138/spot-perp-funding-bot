@@ -13,7 +13,7 @@ function parseMax(value: unknown, fallback: number): number {
 export async function POST(request: Request) {
   try {
     const { getConfig } = await import("@/lib/strategy-v121/config/strategyConfig");
-    const { refreshAndScan, type MarketScanMode } = await import("@/lib/strategy-v121/market/marketRefreshService");
+    const { refreshAndScan } = await import("@/lib/strategy-v121/market/marketRefreshService");
 
     let body: any = {};
     try {
@@ -25,9 +25,9 @@ export async function POST(request: Request) {
 
     const useDynamicUniverse = toBool(body.useDynamicUniverse);
     const requestedScanMode = body.scanMode === "dynamic_same_exchange" || body.scanMode === "fixed_universe"
-      ? body.scanMode as MarketScanMode
+      ? body.scanMode
       : undefined;
-    const scanMode: MarketScanMode = requestedScanMode ?? (useDynamicUniverse ? "dynamic_same_exchange" : "fixed_universe");
+    const scanMode = requestedScanMode ?? (useDynamicUniverse ? "dynamic_same_exchange" : "fixed_universe");
     const maxDynamicSymbolsPerExchange = parseMax(body.maxDynamicSymbolsPerExchange, 50);
 
     const config = getConfig();
