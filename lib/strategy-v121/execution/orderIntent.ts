@@ -8,6 +8,8 @@ import { getRepository } from "../persistence/repositoryFactory";
 
 function repo() { return getRepository(); }
 
+export type OrderIntentPurpose = "real_arbitrage" | "execution_rehearsal";
+
 export interface OrderIntent {
   intentId: string;
   mode: string;
@@ -25,7 +27,7 @@ export interface OrderIntent {
   manualConfirmPassed: boolean;
   dryRun: boolean;
   realOrderExecutionEnabled: boolean;
-  purpose: "real_arbitrage" | "execution_rehearsal";
+  purpose: OrderIntentPurpose;
   simulationOnly: boolean;
   realTradeEligible: boolean;
   dataSource: string;
@@ -39,10 +41,14 @@ export function createOrderIntent(params: {
   batchNo: number;
   reason?: string;
   manualConfirmText?: string;
+  dryRun?: boolean;
+  purpose?: OrderIntentPurpose;
+  simulationOnly?: boolean;
+  realTradeEligible?: boolean;
 }): OrderIntent {
   const gate = checkMainnetTinyGate();
   const realOrderEnabled = process.env.V121_REAL_ORDER_EXECUTION_ENABLED === "true";
-  const dryRun = process.env.V121_MAINNET_TINY_DRY_RUN === "true" || !realOrderEnabled;
+  const dryRun = params.dryRun ?? (process.env.V121_MAINNET_TINY_DRY_RUN === "true" || !realOrderEnabled);
   const confirmOk = params.manualConfirmText === "I_UNDERSTAND_MAINNET_TINY_10U";
   const limitCheck = validateOrderIntent({
     symbol: params.symbol,
@@ -52,6 +58,15 @@ export function createOrderIntent(params: {
     totalExposureUsdt: params.plannedNotionalUsdt,
   });
 
+  const purpose: OrderIntentPurpose = params.purpose ?? "real_arbitrage";
+  const simulationOnly = params.simulationOnly ?? false;
+  const defaultRealTradeEligible = !simulationOnly
+    && purpose === "real_arbitrage"
+    && limitCheck.allowed
+    && params.spotExchange === params.perpExchange
+    && params.spotExchange !== "htx";
+  const realTradeEligible = params.realTradeEligible ?? defaultRealTradeEligible;
+
   const blockedReasons: string[] = [
     ...gate.missing.map(m => `环境门: ${m}`),
     ...gate.warnings.map(w => `警告: ${w}`),
@@ -59,6 +74,7 @@ export function createOrderIntent(params: {
   ];
   if (!confirmOk) blockedReasons.push("人工确认未通过（需输入 I_UNDERSTAND_MAINNET_TINY_10U）");
   if (!realOrderEnabled) blockedReasons.push("V121_REAL_ORDER_EXECUTION_ENABLED 未开启");
+  if (simulationOnly) blockedReasons.push("simulationOnly intent 仅用于流程演练，禁止真实资金动作");
 
   const intent: OrderIntent = {
     intentId: `intent-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -77,11 +93,10 @@ export function createOrderIntent(params: {
     manualConfirmPassed: confirmOk,
     dryRun,
     realOrderExecutionEnabled: realOrderEnabled,
-    // 修正 16: 正式 intent 写入 real_arbitrage + realTradeEligible
-    purpose: dryRun ? "execution_rehearsal" : "real_arbitrage",
-    simulationOnly: dryRun,
-    realTradeEligible: !dryRun && gate.allowed && limitCheck.allowed,
-    dataSource: "order_intent",
+    purpose,
+    simulationOnly,
+    realTradeEligible,
+    dataSource: simulationOnly ? "execution_rehearsal_intent" : "order_intent",
   };
 
   repo().save("order_intents", intent as any);
