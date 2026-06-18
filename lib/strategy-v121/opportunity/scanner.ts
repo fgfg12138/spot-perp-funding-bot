@@ -16,6 +16,7 @@ export interface ScannerInput {
   takerRate: number;
   isTakerEntry: boolean;
   scanMode?: "fixed_universe" | "dynamic_same_exchange";
+  settings?: unknown;
 }
 
 export interface ScannerOutput {
