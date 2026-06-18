@@ -1,11 +1,34 @@
 import { NextResponse } from "next/server";
 
+function toBool(value: unknown): boolean {
+  return value === true || value === 1 || value === "1" || value === "true";
+}
+
+function parseMax(value: unknown, fallback: number): number {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback;
+}
+
 /** POST /api/v121/opportunities/scan */
-export async function POST() {
+export async function POST(request: Request) {
   try {
     const { getConfig } = await import("@/lib/strategy-v121/config/strategyConfig");
-    const { refreshAndScan } = await import("@/lib/strategy-v121/market/marketRefreshService");
-    const { saveLatestScan } = await import("@/lib/strategy-v121/opportunity/opportunityStore");
+    const { refreshAndScan, type MarketScanMode } = await import("@/lib/strategy-v121/market/marketRefreshService");
+
+    let body: any = {};
+    try {
+      const text = await request.text();
+      body = text ? JSON.parse(text) : {};
+    } catch {
+      body = {};
+    }
+
+    const useDynamicUniverse = toBool(body.useDynamicUniverse);
+    const requestedScanMode = body.scanMode === "dynamic_same_exchange" || body.scanMode === "fixed_universe"
+      ? body.scanMode as MarketScanMode
+      : undefined;
+    const scanMode: MarketScanMode = requestedScanMode ?? (useDynamicUniverse ? "dynamic_same_exchange" : "fixed_universe");
+    const maxDynamicSymbolsPerExchange = parseMax(body.maxDynamicSymbolsPerExchange, 50);
 
     const config = getConfig();
     const t0 = Date.now();
@@ -13,8 +36,9 @@ export async function POST() {
       plannedNotional: config.plannedNotional,
       makerRate: config.makerRate, takerRate: config.takerRate,
       isTakerEntry: false, systemHealthy: true,
-      useDynamicUniverse: true,
-      scanMode: "dynamic_same_exchange",
+      useDynamicUniverse,
+      scanMode,
+      maxDynamicSymbolsPerExchange,
     });
     const elapsed = Date.now() - t0;
 
@@ -24,6 +48,9 @@ export async function POST() {
         ok: false, error: "scanResult 为空",
         errors: result.errors.map(e => `${e.exchange}/${e.symbol}: ${e.error}`),
         elapsedMs: elapsed,
+        scanMode,
+        dataSource: result.dataSource,
+        dynamicUniverseWarnings: result.dynamicUniverseWarnings,
       }, { status: 500 });
     }
 
@@ -32,31 +59,17 @@ export async function POST() {
       for (const r of opp.rejectReasons) rejectSummary[r.rule] = (rejectSummary[r.rule] ?? 0) + 1;
     }
 
-    try {
-      saveLatestScan({
-        opportunities: scan.opportunities, totalPaths: scan.totalPaths,
-        passedCount: scan.passedCount, rejectedCount: scan.rejectedCount,
-        rejectSummary,
-        errors: result.errors.map(e => ({ exchange: e.exchange, symbol: e.symbol, error: e.error })),
-        dataSource: result.errors.length === 0 ? "real_market" : "real_market_with_errors",
-        scannedAtUtc: scan.scannedAtUtc || Date.now(),
-        durationMs: elapsed,
-        symbolsScanned: 5, exchangesScanned: 3,
-      });
-    } catch (saveErr: any) {
-      return NextResponse.json({
-        ok: false, error: "保存扫描结果失败", detail: saveErr.message,
-        scannedOk: true, elapsedMs: elapsed,
-      }, { status: 500 });
-    }
-
     return NextResponse.json({
       ok: true,
       opportunities: scan.opportunities,
       total: scan.totalPaths, passedCount: scan.passedCount,
       rejectedCount: scan.rejectedCount, rejectSummary,
       errors: result.errors.map(e => ({ exchange: e.exchange, symbol: e.symbol, error: e.error })),
-      dataSource: result.errors.length === 0 ? "real_market" : "real_market_with_errors",
+      dataSource: result.dataSource,
+      scanMode: result.scanMode,
+      dynamicUniverseCount: result.dynamicUniverseCount,
+      dynamicUniverseByExchange: result.dynamicUniverseByExchange,
+      dynamicUniverseWarnings: result.dynamicUniverseWarnings,
       scannedAtUtc: scan.scannedAtUtc || Date.now(), elapsedMs: elapsed,
       mode: config.mode,
     });
