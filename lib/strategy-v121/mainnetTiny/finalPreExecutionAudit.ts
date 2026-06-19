@@ -25,6 +25,15 @@ export interface FinalAuditResult {
     capitalPrecheckPassed?: boolean;
     constraintPrecheckPassed?: boolean;
     orchestratorState?: string;
+    userSettings?: {
+      minFundingRate8h: number;
+      plannedNotionalUsdt: number;
+      maxOrderNotionalUsdt: number;
+      allowAutoTransfer: boolean;
+      transferMode: string;
+      maxAutoTransferUsdt: number;
+      requireHumanApproval: boolean;
+    };
   };
   chineseMessage: string;
 }
@@ -141,6 +150,14 @@ export async function runFinalPreExecutionAudit(): Promise<FinalAuditResult> {
   const allJson = JSON.stringify(repo.queryAll("latest_scan"));
   const secretOk = !allJson.includes("API_KEY") && !allJson.includes("API_SECRET") && !allJson.includes("PASSPHRASE");
 
+  // 加载用户设置
+  let userSettings: FinalAuditResult["evidence"]["userSettings"] | undefined;
+  try {
+    const { loadSettings } = await import("../settings/userStrategySettingsStore");
+    const s = await loadSettings();
+    userSettings = { minFundingRate8h: s.funding.minFundingRate8h, plannedNotionalUsdt: s.notional.plannedNotionalUsdt, maxOrderNotionalUsdt: s.notional.maxOrderNotionalUsdt, allowAutoTransfer: s.transfer.allowAutoTransfer, transferMode: s.transfer.mode, maxAutoTransferUsdt: s.transfer.maxAutoTransferUsdt, requireHumanApproval: s.execution.requireHumanApproval };
+  } catch {}
+
   const runbookOk = fs.existsSync(path.join(process.cwd(), "docs/mainnet_tiny_runbook.md"));
   const checklistOk = fs.existsSync(path.join(process.cwd(), "docs/mainnet_tiny_final_checklist.md"));
 
@@ -167,6 +184,7 @@ export async function runFinalPreExecutionAudit(): Promise<FinalAuditResult> {
       runbookExists: runbookOk, checklistExists: checklistOk,
       capitalPrecheckPassed, constraintPrecheckPassed,
       orchestratorState,
+      userSettings,
     },
     chineseMessage: blockers.length === 0
       ? "系统具备申请 10U 手动验证的条件，但当前不会真实下单。没有项目方单独批准，不允许进入 M9 actual execution。"

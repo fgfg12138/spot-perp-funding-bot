@@ -30,8 +30,15 @@ export interface SafeExecutionDecision {
   orderConstraintPass: boolean; capitalPrecheckPass: boolean;
   needsAutoTransfer: boolean;
   transferPlan?: { from: "spot" | "perp"; to: "spot" | "perp"; amountUsdt: number; reason: string };
-  requiredNextAction: "none" | "execute_transfer" | "rerun_audit" | "human_approve" | "manual_intervention";
+  requiredNextAction: "none" | "execute_transfer" | "rerun_audit" | "human_approve" | "manual_intervention" | "custom_transfer";
   realExecutionAllowed: false;
+  settingsApplied?: {
+    allowAutoTransfer: boolean;
+    transferMode: string;
+    maxAutoTransferUsdt: number;
+    plannedNotionalUsdt: number;
+    maxOrderNotionalUsdt: number;
+  };
   chineseMessage: string;
 }
 
@@ -91,16 +98,31 @@ export async function runSafeExecutionDecision(input: SafeExecutionInput): Promi
   }
 
   // 需要划转 → TRANSFER_REQUIRED（修正 2: 只有 orderConstraint 通过后才到这里）
-  if (cp.needsAutoTransfer && cp.autoTransferAllowed) {
+  if (cp.needsAutoTransfer) {
+    let requiredNextAction: SafeExecutionDecision["requiredNextAction"] = "execute_transfer";
+    let blockers: string[];
+    if (cp.transferMode === "disabled" || !cp.autoTransferAllowed) {
+      requiredNextAction = "manual_intervention";
+      blockers = ["自动划转未开启，资金不足，请人工处理。"];
+    } else if (cp.transferMode === "suggest_only") {
+      requiredNextAction = "manual_intervention";
+      blockers = ["当前为划转建议模式，请人工划转后重新审计。"];
+    } else if (cp.transferMode === "auto_transfer") {
+      requiredNextAction = "execute_transfer";
+      blockers = ["需要同交易所内部划转，划转后必须重新审计。"];
+    } else {
+      requiredNextAction = "custom_transfer"; blockers = ["需要内部划转。"];
+    }
     return {
       sessionId: `sx-${Date.now()}`, intentId: input.intentId,
       state: "TRANSFER_REQUIRED", exchange: input.exchange, symbol: input.symbol,
       plannedNotionalUsdt: input.plannedNotionalUsdt, actualNotionalUsdt: actualNotional,
-      blockers: ["需要自动内部划转。划转完成并重新审计前不能下单。"], warnings: [],
+      blockers, warnings: [],
       orderConstraintPass: true, capitalPrecheckPass: false,
       needsAutoTransfer: true, transferPlan: cp.transferPlan,
-      requiredNextAction: "execute_transfer", realExecutionAllowed: false,
+      requiredNextAction, realExecutionAllowed: false,
       chineseMessage: `需要划转 ${cp.transferPlan?.amountUsdt?.toFixed(2)}U (${cp.transferPlan?.from}→${cp.transferPlan?.to})。`,
+      settingsApplied: { allowAutoTransfer: cp.transferMode !== "disabled", transferMode: cp.transferMode ?? "disabled", maxAutoTransferUsdt: 0, plannedNotionalUsdt: input.plannedNotionalUsdt, maxOrderNotionalUsdt: input.plannedNotionalUsdt },
     };
   }
 
@@ -119,5 +141,6 @@ export async function runSafeExecutionDecision(input: SafeExecutionInput): Promi
     needsAutoTransfer: false, requiredNextAction: "human_approve",
     realExecutionAllowed: false,
     chineseMessage: `预检全部通过，actual=${actualNotional.toFixed(2)}U。等待人工确认。当前不会真实下单。`,
+    settingsApplied: cp.transferMode ? { allowAutoTransfer: cp.autoTransferAllowed, transferMode: cp.transferMode, maxAutoTransferUsdt: 0, plannedNotionalUsdt: input.plannedNotionalUsdt, maxOrderNotionalUsdt: input.plannedNotionalUsdt } : undefined,
   };
 }

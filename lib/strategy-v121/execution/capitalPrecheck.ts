@@ -22,6 +22,7 @@ export interface CapitalPrecheckResult {
   minRequiredNotionalUsdt: number;
   needsAutoTransfer: boolean;
   autoTransferAllowed: boolean;
+  transferMode?: "disabled" | "suggest_only" | "auto_transfer";
   transferPlan?: {
     from: "spot" | "perp";
     to: "spot" | "perp";
@@ -136,8 +137,20 @@ export async function runCapitalPrecheck(
   const spotSurplus = Math.max(0, spotFree - spotRequired);
   const perpSurplus = Math.max(0, perpFree - perpRequired);
 
-  const allowTransfer = getEnvNum("V121_ALLOW_AUTO_TRANSFER", 0) === 1 || process.env.V121_ALLOW_AUTO_TRANSFER === "true";
-  const transferMax = getEnvNum("V121_AUTO_TRANSFER_MAX_USDT", 50);
+  // 加载用户设置获取划转模式
+  let allowTransfer = false;
+  let transferMax = 50;
+  let transferMode: "disabled" | "suggest_only" | "auto_transfer" = "disabled";
+  try {
+    const { loadSettings } = await import("../settings/userStrategySettingsStore");
+    const us = await loadSettings();
+    transferMode = us.transfer.mode;
+    transferMax = us.transfer.maxAutoTransferUsdt;
+    allowTransfer = us.transfer.allowAutoTransfer && transferMode !== "disabled";
+  } catch {
+    allowTransfer = getEnvNum("V121_ALLOW_AUTO_TRANSFER", 0) === 1 || process.env.V121_ALLOW_AUTO_TRANSFER === "true";
+    transferMax = getEnvNum("V121_AUTO_TRANSFER_MAX_USDT", 50);
+  }
 
   let transferPlan: CapitalPrecheckResult["transferPlan"] | undefined;
   let needsTransfer = false;
@@ -193,7 +206,8 @@ export async function runCapitalPrecheck(
     spotShortageUsdt: spotShortage, perpShortageUsdt: perpShortage,
     spotSurplusUsdt: spotSurplus, perpSurplusUsdt: perpSurplus,
     minRequiredNotionalUsdt: minRequired,
-    needsAutoTransfer: needsTransfer, autoTransferAllowed: transferOk,
+    needsAutoTransfer: needsTransfer, transferMode,
+    autoTransferAllowed: transferOk,
     transferPlan,
     passBeforeTransfer: passBefore, passAfterTransfer: passAfter,
     blockReason, realExecutionAllowed: false,
