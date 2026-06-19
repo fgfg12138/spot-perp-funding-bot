@@ -114,4 +114,12 @@ export class OkxAccountAdapter implements IAccountAdapter {
   }> {
     return { ok: false, blockers: ["okx_validate_order_plan_not_implemented"], warnings: [] };
   }
+
+  async submitOrderLeg(leg: any, _options: any): Promise<any> {
+    return { ok: false, exchange: "okx", symbol: leg.symbol, market: leg.market, role: leg.role, clientOrderId: leg.clientOrderId, status: "REJECTED", submittedAtUtc: new Date().toISOString(), error: "okx_submit_order_leg_not_supported" };
+  }
+
+  async fetchOrderByClientOrderId(input: any): Promise<any> {
+    return { ok: false, exchange: "okx", symbol: input.symbol, market: input.market, role: "spot_buy", clientOrderId: input.clientOrderId, status: "UNKNOWN", submittedAtUtc: new Date().toISOString(), error: "okx_fetch_order_not_supported" };
+  }
 }

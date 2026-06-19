@@ -48,8 +48,12 @@ function safeRawError(err: unknown): Record<string, unknown> {
 export class BinanceAccountAdapter implements IAccountAdapter {
   readonly exchangeId: ExchangeId = "binance";
 
-  private async signedGet(base: string, path: string): Promise<any> {
-    const query = `timestamp=${utcTimestampMs()}&recvWindow=5000`;
+  private async signedGet(base: string, path: string, extraParams?: Record<string, string>): Promise<any> {
+    let query = `timestamp=${utcTimestampMs()}&recvWindow=5000`;
+    if (extraParams) {
+      const extra = new URLSearchParams(extraParams).toString();
+      query = `${extra}&${query}`;
+    }
     const { signature, apiKey } = binanceSign(query);
     const url = `${base}${path}?${query}&signature=${signature}`;
     const result = await safeFetch(url, { headers: { "X-MBX-APIKEY": apiKey } });
@@ -216,4 +220,120 @@ export class BinanceAccountAdapter implements IAccountAdapter {
 
     return { ok: blockers.length === 0, blockers, warnings, raw };
   }
+
+  // ─── Order Execution ──────────────────────────────────────
+
+  async submitOrderLeg(leg: import("../../execution/orderTypes").PlannedOrderLeg, options: { dryRun: boolean; explicitConfirm?: string }): Promise<import("../../execution/orderExecutionTypes").ExchangeOrderSubmissionResult> {
+    if (leg.exchange !== "binance") return makeFailed(leg, "exchange_not_supported");
+    if (leg.type !== "MARKET") return makeFailed(leg, "only_market_supported_first_version");
+    if (!options.dryRun && options.explicitConfirm !== "EXECUTE_REAL_TWO_LEG_ORDER") return makeFailed(leg, "explicit_confirm_required");
+    if (leg.role === "spot_buy") return this.submitSpotBuyMarket(leg, options.dryRun);
+    if (leg.role === "perp_short") return this.submitPerpShortMarket(leg, options.dryRun);
+    return makeFailed(leg, "unsupported_order_leg_role");
+  }
+
+  async fetchOrderByClientOrderId(input: { symbol: string; market: "spot" | "perp"; clientOrderId: string }): Promise<import("../../execution/orderExecutionTypes").ExchangeOrderSubmissionResult> {
+    try {
+      const sym = input.symbol.replace("/", "");
+      const base = input.market === "spot" ? SPOT : FUTURES;
+      const path = input.market === "spot" ? "/api/v3/order" : "/fapi/v1/order";
+      const data = await this.signedGet(base, path, { symbol: sym, origClientOrderId: input.clientOrderId });
+      return {
+        ok: true, exchange: "binance", symbol: input.symbol, market: input.market,
+        role: data.side === "BUY" ? "spot_buy" : "perp_short",
+        clientOrderId: input.clientOrderId,
+        exchangeOrderId: String(data.orderId ?? ""),
+        status: data.status ?? "UNKNOWN",
+        executedQty: Number(data.executedQty ?? 0),
+        executedQuoteQty: Number(data.cummulativeQuoteQty ?? 0),
+        avgPrice: Number(data.avgPrice ?? 0),
+        submittedAtUtc: new Date().toISOString(),
+      };
+    } catch (e: any) {
+      return { ok: false, exchange: "binance", symbol: input.symbol, market: input.market, role: "spot_buy", clientOrderId: input.clientOrderId, status: "UNKNOWN", submittedAtUtc: new Date().toISOString(), error: e.message };
+    }
+  }
+
+  private async submitSpotBuyMarket(leg: import("../../execution/orderTypes").PlannedOrderLeg, dryRun: boolean): Promise<import("../../execution/orderExecutionTypes").ExchangeOrderSubmissionResult> {
+    if (dryRun) return dryRunResult(leg, "NEW");
+    if (process.env.V121_ENABLE_REAL_ORDER_EXECUTION !== "1") return makeFailed(leg, "real_order_execution_env_disabled");
+    try {
+      const sym = leg.symbol.replace("/", "");
+      const response = await this.signedPost(SPOT, "/api/v3/order", {
+        symbol: sym, side: "BUY", type: "MARKET",
+        quoteOrderQty: normalizeAmount(leg.quoteNotionalUsdt),
+        newClientOrderId: leg.clientOrderId,
+        newOrderRespType: "FULL",
+        recvWindow: "5000", timestamp: String(utcTimestampMs()),
+      });
+      return normalizeSpotResponse(response, leg);
+    } catch (e: any) {
+      return { ok: false, exchange: "binance", symbol: leg.symbol, market: "spot", role: "spot_buy", clientOrderId: leg.clientOrderId, status: "REJECTED", submittedAtUtc: new Date().toISOString(), error: e.message };
+    }
+  }
+
+  private async submitPerpShortMarket(leg: import("../../execution/orderTypes").PlannedOrderLeg, dryRun: boolean): Promise<import("../../execution/orderExecutionTypes").ExchangeOrderSubmissionResult> {
+    if (dryRun) return dryRunResult(leg, "NEW");
+    if (process.env.V121_ENABLE_REAL_ORDER_EXECUTION !== "1") return makeFailed(leg, "real_order_execution_env_disabled");
+    try {
+      const sym = leg.symbol.replace("/", "");
+      const params: Record<string, string> = {
+        symbol: sym, side: "SELL", type: "MARKET",
+        quantity: normalizeAmount(leg.quantity),
+        newClientOrderId: leg.clientOrderId,
+        recvWindow: "5000", timestamp: String(utcTimestampMs()),
+      };
+      if (leg.positionSide === "SHORT") params.positionSide = "SHORT";
+      const response = await this.signedPost(FUTURES, "/fapi/v1/order", params);
+      return normalizeFuturesResponse(response, leg);
+    } catch (e: any) {
+      return { ok: false, exchange: "binance", symbol: leg.symbol, market: "perp", role: "perp_short", clientOrderId: leg.clientOrderId, status: "REJECTED", submittedAtUtc: new Date().toISOString(), error: e.message };
+    }
+  }
+}
+
+// ─── Helpers ────────────────────────────────────────────────
+
+function normalizeAmount(v: number): string {
+  return v.toFixed(8).replace(/\.?0+$/, "");
+}
+
+function makeFailed(leg: import("../../execution/orderTypes").PlannedOrderLeg, error: string): import("../../execution/orderExecutionTypes").ExchangeOrderSubmissionResult {
+  return { ok: false, exchange: leg.exchange, symbol: leg.symbol, market: leg.market, role: leg.role, clientOrderId: leg.clientOrderId, status: "REJECTED", submittedAtUtc: new Date().toISOString(), error };
+}
+
+function dryRunResult(leg: import("../../execution/orderTypes").PlannedOrderLeg, status: string): import("../../execution/orderExecutionTypes").ExchangeOrderSubmissionResult {
+  return { ok: true, exchange: leg.exchange, symbol: leg.symbol, market: leg.market, role: leg.role, clientOrderId: leg.clientOrderId, status: status as any, submittedAtUtc: new Date().toISOString(), raw: { dryRun: true } };
+}
+
+function normalizeSpotResponse(response: any, leg: import("../../execution/orderTypes").PlannedOrderLeg): import("../../execution/orderExecutionTypes").ExchangeOrderSubmissionResult {
+  const status = response.status ?? "UNKNOWN";
+  return {
+    ok: status !== "REJECTED",
+    exchange: "binance", symbol: leg.symbol, market: "spot", role: "spot_buy",
+    clientOrderId: leg.clientOrderId,
+    exchangeOrderId: String(response.orderId ?? ""),
+    status,
+    executedQty: Number(response.executedQty ?? 0),
+    executedQuoteQty: Number(response.cummulativeQuoteQty ?? 0),
+    avgPrice: Number(response.avgPrice ?? response.fills?.[0]?.price ?? 0),
+    submittedAtUtc: new Date().toISOString(),
+    raw: response,
+  };
+}
+
+function normalizeFuturesResponse(response: any, leg: import("../../execution/orderTypes").PlannedOrderLeg): import("../../execution/orderExecutionTypes").ExchangeOrderSubmissionResult {
+  const status = response.status ?? "UNKNOWN";
+  return {
+    ok: status !== "REJECTED",
+    exchange: "binance", symbol: leg.symbol, market: "perp", role: "perp_short",
+    clientOrderId: leg.clientOrderId,
+    exchangeOrderId: String(response.orderId ?? ""),
+    status,
+    executedQty: Number(response.executedQty ?? 0),
+    executedQuoteQty: Number(response.cummulativeQuoteQty ?? 0),
+    avgPrice: Number(response.avgPrice ?? 0),
+    submittedAtUtc: new Date().toISOString(),
+    raw: response,
+  };
 }

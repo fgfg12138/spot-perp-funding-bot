@@ -1,6 +1,7 @@
 import type { ExchangeId } from "../domain/types";
 import type { InternalTransferRequest, InternalTransferResult } from "../execution/internalTransferTypes";
-import type { TwoLegOrderPlan } from "../execution/orderTypes";
+import type { TwoLegOrderPlan, PlannedOrderLeg } from "../execution/orderTypes";
+import type { ExchangeOrderSubmissionResult } from "../execution/orderExecutionTypes";
 
 export type AccountPermissionMode = "read_only" | "trade_enabled" | "withdraw_enabled" | "unknown";
 
@@ -65,4 +66,11 @@ export interface IAccountAdapter {
     warnings: string[];
     raw?: unknown;
   }>;
+  submitOrderLeg?(
+    leg: PlannedOrderLeg,
+    options: { dryRun: boolean; explicitConfirm?: string },
+  ): Promise<ExchangeOrderSubmissionResult>;
+  fetchOrderByClientOrderId?(
+    input: { symbol: string; market: "spot" | "perp"; clientOrderId: string },
+  ): Promise<ExchangeOrderSubmissionResult>;
 }

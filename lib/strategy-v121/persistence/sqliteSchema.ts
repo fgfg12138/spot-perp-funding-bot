@@ -121,6 +121,27 @@ export const EXTRA_TABLES: Record<string, string> = {
     CREATE INDEX IF NOT EXISTS idx_order_plan_ledger_intent_id ON order_plan_ledger(intent_id);
     CREATE INDEX IF NOT EXISTS idx_order_plan_ledger_status ON order_plan_ledger(status);
   `,
+  ORDER_EXECUTION_LEDGER: `
+    CREATE TABLE IF NOT EXISTS order_execution_ledger (
+      id TEXT PRIMARY KEY,
+      order_plan_id TEXT NOT NULL,
+      exchange TEXT NOT NULL,
+      symbol TEXT NOT NULL,
+      status TEXT NOT NULL,
+      spot_client_order_id TEXT,
+      spot_exchange_order_id TEXT,
+      spot_status TEXT,
+      perp_client_order_id TEXT,
+      perp_exchange_order_id TEXT,
+      perp_status TEXT,
+      frozen_reason TEXT,
+      raw_json TEXT NOT NULL,
+      created_at_utc TEXT NOT NULL,
+      updated_at_utc TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_order_execution_ledger_order_plan_id ON order_execution_ledger(order_plan_id);
+    CREATE INDEX IF NOT EXISTS idx_order_execution_ledger_status ON order_execution_ledger(status);
+  `,
 };
 
 export function getExtraCreateSQL(): string[] {

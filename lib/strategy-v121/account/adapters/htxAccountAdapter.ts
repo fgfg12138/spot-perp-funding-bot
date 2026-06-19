@@ -124,4 +124,12 @@ export class HtxAccountAdapter implements IAccountAdapter {
   }> {
     return { ok: false, blockers: ["htx_validate_order_plan_blocked"], warnings: [] };
   }
+
+  async submitOrderLeg(leg: any, _options: any): Promise<any> {
+    return { ok: false, exchange: "htx", symbol: leg.symbol, market: leg.market, role: leg.role, clientOrderId: leg.clientOrderId, status: "REJECTED", submittedAtUtc: new Date().toISOString(), error: "htx_submit_order_leg_blocked" };
+  }
+
+  async fetchOrderByClientOrderId(input: any): Promise<any> {
+    return { ok: false, exchange: "htx", symbol: input.symbol, market: input.market, role: "spot_buy", clientOrderId: input.clientOrderId, status: "UNKNOWN", submittedAtUtc: new Date().toISOString(), error: "htx_fetch_order_blocked" };
+  }
 }
