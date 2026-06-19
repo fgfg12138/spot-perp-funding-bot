@@ -52,6 +52,22 @@ export class MockAccountAdapter implements IAccountAdapter {
   async fetchPositions(): Promise<AccountPositionSnapshot[]> { return []; }
   async fetchOpenOrders(): Promise<OpenOrderSnapshot[]> { return []; }
   async healthCheck(): Promise<boolean> { return false; }
+
+  async transferInternal(request: import("../execution/internalTransferTypes").InternalTransferRequest): Promise<import("../execution/internalTransferTypes").InternalTransferResult> {
+    return {
+      ok: true,
+      status: request.dryRun ? "dry_run" : "submitted",
+      exchange: request.exchange,
+      asset: "USDT",
+      fromAccount: request.fromAccount,
+      toAccount: request.toAccount,
+      amountUsdt: request.amountUsdt,
+      idempotencyKey: request.idempotencyKey,
+      transferId: `mock-transfer-${request.idempotencyKey}`,
+      submittedAtUtc: new Date().toISOString(),
+      warnings: ["mock_internal_transfer_only"],
+    };
+  }
 }
 
 /**

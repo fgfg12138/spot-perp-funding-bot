@@ -98,4 +98,14 @@ export class OkxAccountAdapter implements IAccountAdapter {
       return false;
     }
   }
+
+  async transferInternal(request: import("../../execution/internalTransferTypes").InternalTransferRequest): Promise<import("../../execution/internalTransferTypes").InternalTransferResult> {
+    if (request.exchange !== "okx") return { ok: false, status: "failed", exchange: "okx", asset: "USDT", fromAccount: request.fromAccount, toAccount: request.toAccount, amountUsdt: request.amountUsdt, idempotencyKey: request.idempotencyKey, error: "exchange_mismatch", warnings: [] };
+    if (request.asset !== "USDT") return { ok: false, status: "failed", exchange: "okx", asset: "USDT", fromAccount: request.fromAccount, toAccount: request.toAccount, amountUsdt: request.amountUsdt, idempotencyKey: request.idempotencyKey, error: "only_usdt_supported", warnings: [] };
+    if (request.fromAccount === request.toAccount) return { ok: false, status: "failed", exchange: "okx", asset: "USDT", fromAccount: request.fromAccount, toAccount: request.toAccount, amountUsdt: request.amountUsdt, idempotencyKey: request.idempotencyKey, error: "same_account_transfer_rejected", warnings: [] };
+    if (request.dryRun) return { ok: true, status: "dry_run", exchange: "okx", asset: "USDT", fromAccount: request.fromAccount, toAccount: request.toAccount, amountUsdt: request.amountUsdt, idempotencyKey: request.idempotencyKey, warnings: ["dry_run_no_real_transfer"] };
+    if (process.env.V121_ENABLE_REAL_INTERNAL_TRANSFER !== "1") return { ok: false, status: "failed", exchange: "okx", asset: "USDT", fromAccount: request.fromAccount, toAccount: request.toAccount, amountUsdt: request.amountUsdt, idempotencyKey: request.idempotencyKey, error: "real_internal_transfer_env_disabled", warnings: [] };
+    // OKX 内部划转 endpoint 待核对文档后再实现
+    return { ok: false, status: "failed", exchange: "okx", asset: "USDT", fromAccount: request.fromAccount, toAccount: request.toAccount, amountUsdt: request.amountUsdt, idempotencyKey: request.idempotencyKey, error: "real_internal_transfer_not_implemented", warnings: [] };
+  }
 }

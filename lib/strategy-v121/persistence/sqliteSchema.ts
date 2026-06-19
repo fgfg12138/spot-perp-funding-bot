@@ -84,6 +84,25 @@ export const EXTRA_TABLES: Record<string, string> = {
       updated_at_utc INTEGER NOT NULL
     );
   `,
+  INTERNAL_TRANSFER_LEDGER: `
+    CREATE TABLE IF NOT EXISTS internal_transfer_ledger (
+      id TEXT PRIMARY KEY,
+      intent_id TEXT,
+      decision_id TEXT,
+      exchange TEXT NOT NULL,
+      asset TEXT NOT NULL DEFAULT 'USDT',
+      from_account TEXT NOT NULL,
+      to_account TEXT NOT NULL,
+      amount_usdt REAL NOT NULL,
+      status TEXT NOT NULL,
+      idempotency_key TEXT NOT NULL UNIQUE,
+      transfer_id TEXT,
+      error TEXT,
+      raw_json TEXT,
+      created_at_utc TEXT NOT NULL,
+      updated_at_utc TEXT NOT NULL
+    );
+  `,
 };
 
 export function getExtraCreateSQL(): string[] {
@@ -95,5 +114,5 @@ export const ALL_TABLE_NAMES = [
   "position_snapshots", "funding_settlements", "exit_executions", "final_reviews",
   "paper_executions", "latest_scan", "order_intents",
   "blocked_execution_attempts", "worker_heartbeat",
-  "user_strategy_settings",
+  "user_strategy_settings", "internal_transfer_ledger",
 ];

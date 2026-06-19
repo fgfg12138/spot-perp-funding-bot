@@ -29,7 +29,8 @@ export interface SafeExecutionDecision {
   blockers: string[]; warnings: string[];
   orderConstraintPass: boolean; capitalPrecheckPass: boolean;
   needsAutoTransfer: boolean;
-  transferPlan?: { from: "spot" | "perp"; to: "spot" | "perp"; amountUsdt: number; reason: string };
+  autoTransferExecutable?: boolean;
+  transferPlan?: { exchange: ExchangeId; asset: "USDT"; fromAccount: "spot" | "perp"; toAccount: "spot" | "perp"; amountUsdt: number; reason: string };
   requiredNextAction: "none" | "execute_transfer" | "rerun_audit" | "human_approve" | "manual_intervention" | "custom_transfer";
   realExecutionAllowed: false;
   settingsApplied?: {
@@ -119,7 +120,17 @@ export async function runSafeExecutionDecision(input: SafeExecutionInput): Promi
       plannedNotionalUsdt: input.plannedNotionalUsdt, actualNotionalUsdt: actualNotional,
       blockers, warnings: [],
       orderConstraintPass: true, capitalPrecheckPass: false,
-      needsAutoTransfer: true, transferPlan: cp.transferPlan,
+      needsAutoTransfer: true, transferPlan: cp.transferPlan ? {
+        exchange: input.exchange as ExchangeId,
+        asset: "USDT" as const,
+        fromAccount: cp.transferPlan.from as "spot" | "perp",
+        toAccount: cp.transferPlan.to as "spot" | "perp",
+        amountUsdt: cp.transferPlan.amountUsdt,
+        reason: cp.transferPlan.reason,
+      } : undefined,
+      autoTransferExecutable: cp.transferMode === "auto_transfer" &&
+        (cp.transferPlan?.amountUsdt ?? 0) <= 50 &&
+        input.exchange !== "htx",
       requiredNextAction, realExecutionAllowed: false,
       chineseMessage: `需要划转 ${cp.transferPlan?.amountUsdt?.toFixed(2)}U (${cp.transferPlan?.from}→${cp.transferPlan?.to})。`,
       settingsApplied: { allowAutoTransfer: cp.transferMode !== "disabled", transferMode: cp.transferMode ?? "disabled", maxAutoTransferUsdt: 0, plannedNotionalUsdt: input.plannedNotionalUsdt, maxOrderNotionalUsdt: input.plannedNotionalUsdt },

@@ -114,4 +114,8 @@ export class HtxAccountAdapter implements IAccountAdapter {
       return false;
     }
   }
+
+  async transferInternal(request: import("../../execution/internalTransferTypes").InternalTransferRequest): Promise<import("../../execution/internalTransferTypes").InternalTransferResult> {
+    return { ok: false, status: "failed", exchange: "htx", asset: "USDT", fromAccount: request.fromAccount, toAccount: request.toAccount, amountUsdt: request.amountUsdt, idempotencyKey: request.idempotencyKey, error: "htx_auto_transfer_blocked", warnings: [] };
+  }
 }

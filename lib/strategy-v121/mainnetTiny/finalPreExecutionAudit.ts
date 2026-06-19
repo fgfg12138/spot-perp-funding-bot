@@ -34,6 +34,13 @@ export interface FinalAuditResult {
       maxAutoTransferUsdt: number;
       requireHumanApproval: boolean;
     };
+    internalTransferPolicy?: {
+      allowAutoTransfer: boolean;
+      transferMode: string;
+      maxAutoTransferUsdt: number;
+      requireReauditAfterTransfer: boolean;
+      realInternalTransferEnvEnabled: boolean;
+    };
   };
   chineseMessage: string;
 }
@@ -185,6 +192,13 @@ export async function runFinalPreExecutionAudit(): Promise<FinalAuditResult> {
       capitalPrecheckPassed, constraintPrecheckPassed,
       orchestratorState,
       userSettings,
+      internalTransferPolicy: userSettings ? {
+        allowAutoTransfer: userSettings.allowAutoTransfer,
+        transferMode: userSettings.transferMode,
+        maxAutoTransferUsdt: userSettings.maxAutoTransferUsdt,
+        requireReauditAfterTransfer: true,
+        realInternalTransferEnvEnabled: process.env.V121_ENABLE_REAL_INTERNAL_TRANSFER === "1",
+      } : undefined,
     },
     chineseMessage: blockers.length === 0
       ? "系统具备申请 10U 手动验证的条件，但当前不会真实下单。没有项目方单独批准，不允许进入 M9 actual execution。"

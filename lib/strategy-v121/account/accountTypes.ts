@@ -1,4 +1,5 @@
 import type { ExchangeId } from "../domain/types";
+import type { InternalTransferRequest, InternalTransferResult } from "../execution/internalTransferTypes";
 
 export type AccountPermissionMode = "read_only" | "trade_enabled" | "withdraw_enabled" | "unknown";
 
@@ -56,4 +57,5 @@ export interface IAccountAdapter {
   fetchPositions(): Promise<AccountPositionSnapshot[]>;
   fetchOpenOrders(): Promise<OpenOrderSnapshot[]>;
   healthCheck(): Promise<boolean>;
+  transferInternal?(request: InternalTransferRequest): Promise<InternalTransferResult>;
 }

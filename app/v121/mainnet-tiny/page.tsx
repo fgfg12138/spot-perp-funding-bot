@@ -7,12 +7,16 @@ export default function MainnetTinyPage() {
   const [preflight, setPreflight] = useState<any>(null);
   const [intents, setIntents] = useState<any[]>([]);
   const [blocked, setBlocked] = useState<any[]>([]);
+  const [settings, setSettings] = useState<any>(null);
+  const [execDecision, setExecDecision] = useState<any>(null);
 
   useEffect(() => {
     fetch("/api/v121/mainnet-tiny/gate").then(r => r.json()).then(setGate).catch(() => {});
     fetch("/api/v121/mainnet-tiny/preflight").then(r => r.json()).then(setPreflight).catch(() => {});
     fetch("/api/v121/mainnet-tiny/intents").then(r => r.json()).then(d => setIntents(d.intents ?? [])).catch(() => {});
     fetch("/api/v121/mainnet-tiny/blocked-attempts").then(r => r.json()).then(d => setBlocked(d.attempts ?? [])).catch(() => {});
+    fetch("/api/v121/mainnet-tiny/orchestrator").then(r => r.json()).then(setExecDecision).catch(() => {});
+    fetch("/api/v121/settings").then(r => r.json()).then(setSettings).catch(() => {});
   }, []);
 
   return (
@@ -121,6 +125,50 @@ export default function MainnetTinyPage() {
             ))}
           </div>
         )}
+      </section>
+
+      {/* 自动内部划转 */}
+      <section className="bg-gray-900 rounded-lg border border-gray-800 p-4 mb-4">
+        <h3 className="text-lg font-semibold mb-3 text-yellow-400">自动内部划转</h3>
+        <div className="text-sm space-y-2">
+          <div className="flex justify-between"><span className="text-gray-400">划转模式</span><span className="font-mono">{settings?.transfer?.mode ?? "—"}</span></div>
+          <div className="flex justify-between"><span className="text-gray-400">最大自动划转</span><span className="font-mono">${settings?.transfer?.maxAutoTransferUsdt ?? "—"} USDT</span></div>
+          <div className="flex justify-between"><span className="text-gray-400">可执行自动划转</span><span className={execDecision?.autoTransferExecutable ? "text-green-400" : "text-red-400"}>{execDecision?.autoTransferExecutable ? "✅ 是" : "❌ 否"}</span></div>
+          {execDecision?.transferPlan && (
+            <div className="border-t border-gray-700 pt-2 mt-2">
+              <div className="text-xs text-gray-500 mb-1">当前 Transfer Plan:</div>
+              <div className="text-xs font-mono bg-gray-800 p-2 rounded space-y-1">
+                <div>交易所: {execDecision.transferPlan.exchange}</div>
+                <div>方向: {execDecision.transferPlan.fromAccount} → {execDecision.transferPlan.toAccount}</div>
+                <div>金额: {execDecision.transferPlan.amountUsdt} USDT</div>
+                <div>原因: {execDecision.transferPlan.reason}</div>
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="flex gap-2 mt-3">
+          <button onClick={async () => {
+            if (!execDecision?.transferPlan) return;
+            await fetch("/api/v121/mainnet-tiny/auto-transfer", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ intentId: execDecision.intentId, decisionId: execDecision.sessionId, transferPlan: execDecision.transferPlan, dryRun: true }),
+            });
+            alert("Dry-run 划转完成（无真实划转）");
+          }} disabled={!execDecision?.transferPlan} className="border border-yellow-500/60 bg-yellow-500/15 text-yellow-200 px-3 py-1.5 text-sm rounded disabled:opacity-30">Dry-run 内部划转并重新审计</button>
+          <button onClick={async () => {
+            if (!execDecision?.transferPlan || !execDecision?.autoTransferExecutable) return;
+            if (!window.confirm("确认执行真实内部划转？不会下单，但会移动交易所账户资金。")) return;
+            const r = await fetch("/api/v121/mainnet-tiny/auto-transfer", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ intentId: execDecision.intentId, decisionId: execDecision.sessionId, transferPlan: execDecision.transferPlan, dryRun: false }),
+            });
+            const d = await r.json();
+            alert(d.ok ? `划转已提交: ${d.status}` : `划转失败: ${(d.blockers ?? []).join(", ")}`);
+          }} disabled={!execDecision?.transferPlan || !execDecision?.autoTransferExecutable} className="border border-red-500/60 bg-red-500/15 text-red-200 px-3 py-1.5 text-sm rounded disabled:opacity-30">执行真实内部划转并重新审计</button>
+        </div>
+        <p className="text-xs text-gray-500 mt-3 border-t border-gray-800 pt-2">
+          真实内部划转只会在同一交易所账户间转 USDT，不会下单。划转后必须重新审计。
+        </p>
       </section>
 
       {/* 拦截记录 */}
