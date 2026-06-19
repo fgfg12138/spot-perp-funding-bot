@@ -140,4 +140,50 @@ describe("executeAutoTransferAndReaudit", () => {
     expect(r.blockers[0]).toContain("余额未变化");
     process.env.V121_ENABLE_REAL_INTERNAL_TRANSFER = origEnv;
   });
+
+  it("11. dryRun=false + env + okx → blocked", async () => {
+    const r = await executeAutoTransferAndReaudit({
+      ...baseInput,
+      transferPlan: { ...baseInput.transferPlan, exchange: "okx" },
+      dryRun: false,
+    });
+    expect(r.ok).toBe(false);
+    expect(r.blockers[0]).toContain("okx_real_internal_transfer");
+  });
+
+  it("12. dryRun=false + binance + env enabled + submitted → balance_confirmed flow", async () => {
+    const origEnv = process.env.V121_ENABLE_REAL_INTERNAL_TRANSFER;
+    process.env.V121_ENABLE_REAL_INTERNAL_TRANSFER = "1";
+    // Before: spot 100. After: spot 80 (for retries, all same)
+    const before = [{ asset: "USDT", free: 100, locked: 0, total: 100, exchange: "binance", fetchedAtUtc: "2025-01-01T00:00:00Z" }];
+    const after = [{ asset: "USDT", free: 80, locked: 0, total: 80, exchange: "binance", fetchedAtUtc: "2025-01-01T00:00:01Z" }];
+    // 1 before + up to 3 after retries = 4 calls
+    mockFetchBalances
+      .mockResolvedValueOnce(before)
+      .mockResolvedValueOnce(after)
+      .mockResolvedValueOnce(after)
+      .mockResolvedValueOnce(after);
+    mockTransferInternal.mockResolvedValue({ ok: true, status: "submitted", exchange: "binance", asset: "USDT", fromAccount: "spot", toAccount: "perp", amountUsdt: 20, idempotencyKey: "ik-12", transferId: "tx12", warnings: [] });
+    const r = await executeAutoTransferAndReaudit({ ...baseInput, dryRun: false });
+    expect(r.ok).toBe(true);
+    expect(r.status).toBe("reaudit_passed");
+    process.env.V121_ENABLE_REAL_INTERNAL_TRANSFER = origEnv;
+  }, 15000);
+
+  it("13. submit ok but balance unchanged → frozen", async () => {
+    const origEnv = process.env.V121_ENABLE_REAL_INTERNAL_TRANSFER;
+    process.env.V121_ENABLE_REAL_INTERNAL_TRANSFER = "1";
+    const same = [{ asset: "USDT", free: 100, locked: 0, total: 100, exchange: "binance", fetchedAtUtc: "2025-01-01T00:00:00Z" }];
+    mockFetchBalances
+      .mockResolvedValueOnce(same)
+      .mockResolvedValueOnce(same)
+      .mockResolvedValueOnce(same)
+      .mockResolvedValueOnce(same);
+    mockTransferInternal.mockResolvedValue({ ok: true, status: "submitted", exchange: "binance", asset: "USDT", fromAccount: "spot", toAccount: "perp", amountUsdt: 20, idempotencyKey: "ik-13", transferId: "tx13", warnings: [] });
+    const r = await executeAutoTransferAndReaudit({ ...baseInput, dryRun: false });
+    expect(r.ok).toBe(false);
+    expect(r.status).toBe("frozen");
+    expect(r.blockers[0]).toContain("余额未变化");
+    process.env.V121_ENABLE_REAL_INTERNAL_TRANSFER = origEnv;
+  }, 15000);
 });

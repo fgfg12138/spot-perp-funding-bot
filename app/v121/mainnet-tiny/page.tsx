@@ -157,14 +157,18 @@ export default function MainnetTinyPage() {
           }} disabled={!execDecision?.transferPlan} className="border border-yellow-500/60 bg-yellow-500/15 text-yellow-200 px-3 py-1.5 text-sm rounded disabled:opacity-30">Dry-run 内部划转并重新审计</button>
           <button onClick={async () => {
             if (!execDecision?.transferPlan || !execDecision?.autoTransferExecutable) return;
-            if (!window.confirm("确认执行真实内部划转？不会下单，但会移动交易所账户资金。")) return;
+            const phrase = window.prompt("输入 EXECUTE_REAL_INTERNAL_TRANSFER 确认真实内部划转。不会下单，但会移动交易所账户资金。");
+            if (phrase !== "EXECUTE_REAL_INTERNAL_TRANSFER") return;
             const r = await fetch("/api/v121/mainnet-tiny/auto-transfer", {
               method: "POST", headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ intentId: execDecision.intentId, decisionId: execDecision.sessionId, transferPlan: execDecision.transferPlan, dryRun: false }),
+              body: JSON.stringify({ intentId: execDecision.intentId, decisionId: execDecision.sessionId, transferPlan: execDecision.transferPlan, dryRun: false, explicitConfirm: "EXECUTE_REAL_INTERNAL_TRANSFER" }),
             });
             const d = await r.json();
             alert(d.ok ? `划转已提交: ${d.status}` : `划转失败: ${(d.blockers ?? []).join(", ")}`);
           }} disabled={!execDecision?.transferPlan || !execDecision?.autoTransferExecutable} className="border border-red-500/60 bg-red-500/15 text-red-200 px-3 py-1.5 text-sm rounded disabled:opacity-30">执行真实内部划转并重新审计</button>
+          {execDecision?.transferPlan?.exchange === "okx" && (
+            <span className="text-xs text-gray-500 self-center ml-2">OKX 真实内部划转尚未启用，仅支持 dry-run。</span>
+          )}
         </div>
         <p className="text-xs text-gray-500 mt-3 border-t border-gray-800 pt-2">
           真实内部划转只会在同一交易所账户间转 USDT，不会下单。划转后必须重新审计。

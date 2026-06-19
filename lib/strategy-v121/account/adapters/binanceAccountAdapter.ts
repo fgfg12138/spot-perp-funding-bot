@@ -12,9 +12,38 @@ import type {
 } from "../accountTypes";
 import { binanceSign, utcTimestampMs } from "./accountSigning";
 import { safeFetch } from "./safeFetch";
+import type { InternalTransferRequest, InternalTransferResult } from "../../execution/internalTransferTypes";
 
 const SPOT = "https://api.binance.com";
 const FUTURES = "https://fapi.binance.com";
+
+// ─── Helper functions ──────────────────────────────────────
+
+function toBinanceUniversalTransferType(input: { fromAccount: "spot" | "perp"; toAccount: "spot" | "perp" }): "MAIN_UMFUTURE" | "UMFUTURE_MAIN" {
+  if (input.fromAccount === "spot" && input.toAccount === "perp") return "MAIN_UMFUTURE";
+  if (input.fromAccount === "perp" && input.toAccount === "spot") return "UMFUTURE_MAIN";
+  throw new Error("unsupported_binance_internal_transfer_direction");
+}
+
+function normalizeTransferAmountUsdt(amount: number): string {
+  if (!Number.isFinite(amount) || amount <= 0) throw new Error("invalid_transfer_amount");
+  const normalized = Math.floor(amount * 100_000_000) / 100_000_000;
+  if (normalized <= 0) throw new Error("transfer_amount_too_small_after_rounding");
+  return normalized.toString();
+}
+
+function normalizeExchangeError(err: unknown): string {
+  if (err instanceof Error) {
+    if ((err as any).code === -2015) return "binance_universal_transfer_permission_required";
+    return err.message;
+  }
+  return String(err);
+}
+
+function safeRawError(err: unknown): Record<string, unknown> {
+  if (err instanceof Error) return { message: err.message, code: (err as any).code, raw: (err as any).raw };
+  return { raw: String(err) };
+}
 
 export class BinanceAccountAdapter implements IAccountAdapter {
   readonly exchangeId: ExchangeId = "binance";
@@ -25,6 +54,26 @@ export class BinanceAccountAdapter implements IAccountAdapter {
     const url = `${base}${path}?${query}&signature=${signature}`;
     const result = await safeFetch(url, { headers: { "X-MBX-APIKEY": apiKey } });
     if (!result.ok) throw new Error(result.errorMessage ?? "Binance 请求失败");
+    return result.body;
+  }
+
+  private async signedPost(base: string, path: string, params: Record<string, string>): Promise<any> {
+    const qs = new URLSearchParams(params).toString();
+    const { signature, apiKey } = binanceSign(qs);
+    const url = `${base}${path}?${qs}&signature=${signature}`;
+    const result = await safeFetch(url, { method: "POST", headers: { "X-MBX-APIKEY": apiKey } });
+    if (!result.ok) {
+      const bodyStr = typeof result.body === "object" ? JSON.stringify(result.body) : String(result.body ?? "");
+      const code = result.body?.code;
+      const msg = result.body?.msg ?? result.errorMessage ?? "";
+      if (code === -2015 || /permission.?denied|not.?enabled/i.test(msg)) {
+        const err = new Error("binance_universal_transfer_permission_required");
+        (err as any).code = -2015;
+        (err as any).raw = result.body;
+        throw err;
+      }
+      throw new Error(result.errorMessage ?? `Binance POST failed (${result.status})`);
+    }
     return result.body;
   }
 
@@ -90,13 +139,34 @@ export class BinanceAccountAdapter implements IAccountAdapter {
     }
   }
 
-  async transferInternal(request: import("../../execution/internalTransferTypes").InternalTransferRequest): Promise<import("../../execution/internalTransferTypes").InternalTransferResult> {
+  async transferInternal(request: InternalTransferRequest): Promise<InternalTransferResult> {
     if (request.exchange !== "binance") return { ok: false, status: "failed", exchange: "binance", asset: "USDT", fromAccount: request.fromAccount, toAccount: request.toAccount, amountUsdt: request.amountUsdt, idempotencyKey: request.idempotencyKey, error: "exchange_mismatch", warnings: [] };
     if (request.asset !== "USDT") return { ok: false, status: "failed", exchange: "binance", asset: "USDT", fromAccount: request.fromAccount, toAccount: request.toAccount, amountUsdt: request.amountUsdt, idempotencyKey: request.idempotencyKey, error: "only_usdt_supported", warnings: [] };
     if (request.fromAccount === request.toAccount) return { ok: false, status: "failed", exchange: "binance", asset: "USDT", fromAccount: request.fromAccount, toAccount: request.toAccount, amountUsdt: request.amountUsdt, idempotencyKey: request.idempotencyKey, error: "same_account_transfer_rejected", warnings: [] };
     if (request.dryRun) return { ok: true, status: "dry_run", exchange: "binance", asset: "USDT", fromAccount: request.fromAccount, toAccount: request.toAccount, amountUsdt: request.amountUsdt, idempotencyKey: request.idempotencyKey, warnings: ["dry_run_no_real_transfer"] };
     if (process.env.V121_ENABLE_REAL_INTERNAL_TRANSFER !== "1") return { ok: false, status: "failed", exchange: "binance", asset: "USDT", fromAccount: request.fromAccount, toAccount: request.toAccount, amountUsdt: request.amountUsdt, idempotencyKey: request.idempotencyKey, error: "real_internal_transfer_env_disabled", warnings: [] };
-    // Binance 内部划转 endpoint 待核对文档后再实现
-    return { ok: false, status: "failed", exchange: "binance", asset: "USDT", fromAccount: request.fromAccount, toAccount: request.toAccount, amountUsdt: request.amountUsdt, idempotencyKey: request.idempotencyKey, error: "real_internal_transfer_not_implemented", warnings: [] };
+
+    try {
+      const type = toBinanceUniversalTransferType({ fromAccount: request.fromAccount, toAccount: request.toAccount });
+      const amount = normalizeTransferAmountUsdt(request.amountUsdt);
+      const response = await this.signedPost(SPOT, "/sapi/v1/asset/transfer", {
+        type, asset: request.asset, amount,
+        timestamp: String(utcTimestampMs()), recvWindow: "5000",
+      });
+      return {
+        ok: true, status: "submitted", exchange: "binance", asset: "USDT",
+        fromAccount: request.fromAccount, toAccount: request.toAccount,
+        amountUsdt: request.amountUsdt, idempotencyKey: request.idempotencyKey,
+        transferId: String(response.tranId ?? ""), submittedAtUtc: new Date().toISOString(),
+        warnings: [], raw: response,
+      };
+    } catch (err) {
+      return {
+        ok: false, status: "failed", exchange: "binance", asset: "USDT",
+        fromAccount: request.fromAccount, toAccount: request.toAccount,
+        amountUsdt: request.amountUsdt, idempotencyKey: request.idempotencyKey,
+        error: normalizeExchangeError(err), warnings: [], raw: safeRawError(err),
+      };
+    }
   }
 }

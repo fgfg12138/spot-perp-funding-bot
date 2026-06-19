@@ -5,9 +5,16 @@ import { createAccountAdapter } from "../account/adapters/accountAdapterFactory"
 
 function makeId(): string { return `autox-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`; }
 
+function toBinanceType(from: string, to: string): string {
+  if (from === "spot" && to === "perp") return "MAIN_UMFUTURE";
+  if (from === "perp" && to === "spot") return "UMFUTURE_MAIN";
+  return "unknown";
+}
+
 export async function executeAutoTransferAndReaudit(input: {
   intentId?: string;
   decisionId?: string;
+  safeExecutionDecision?: { autoTransferExecutable?: boolean };
   transferPlan: {
     exchange: ExchangeId;
     asset: "USDT";
@@ -52,9 +59,22 @@ export async function executeAutoTransferAndReaudit(input: {
     return { ok: false, status: "failed", ledgerId, blockers: [`划转金额 ${input.transferPlan.amountUsdt}U > 最大自动划转 ${settings.transfer.maxAutoTransferUsdt}U`], warnings };
   }
 
+  // safeExecutionDecision check if provided
+  if (input.safeExecutionDecision && input.safeExecutionDecision.autoTransferExecutable !== true) {
+    return { ok: false, status: "failed", ledgerId, blockers: ["safeExecutionDecision.autoTransferExecutable 不为 true"], warnings };
+  }
+
   // 5-7. hard checks
   if (input.transferPlan.exchange === "htx") {
     return { ok: false, status: "failed", ledgerId, blockers: ["HTX 不支持自动划转"], warnings };
+  }
+  // OKX 真实划转尚未启用
+  if (!dryRun && input.transferPlan.exchange === "okx") {
+    return { ok: false, status: "failed", ledgerId, blockers: ["okx_real_internal_transfer_not_enabled_yet"], warnings };
+  }
+  // 第一版真实划转仅允许 Binance
+  if (!dryRun && input.transferPlan.exchange !== "binance") {
+    return { ok: false, status: "failed", ledgerId, blockers: ["real_internal_transfer_only_binance_supported"], warnings };
   }
   if (input.transferPlan.asset !== "USDT") {
     return { ok: false, status: "failed", ledgerId, blockers: ["仅支持 USDT 划转"], warnings };
@@ -103,6 +123,12 @@ export async function executeAutoTransferAndReaudit(input: {
     amountUsdt: input.transferPlan.amountUsdt,
     status: dryRun ? "dry_run" : "planned",
     idempotencyKey: ik,
+    exchangeTransferType: input.transferPlan.exchange === "binance"
+      ? toBinanceType(input.transferPlan.fromAccount, input.transferPlan.toAccount) : undefined,
+    rawJson: JSON.stringify({
+      request: { ...input.transferPlan, intentId: input.intentId, dryRun },
+      timestamp: now,
+    }),
     createdAtUtc: now, updatedAtUtc: now,
   });
 
@@ -153,7 +179,13 @@ export async function executeAutoTransferAndReaudit(input: {
   }
 
   await updateInternalTransferRecord(ledgerId, {
-    status: "submitted", transferId: transfer.transferId, rawJson: JSON.stringify(transfer),
+    status: "submitted", transferId: transfer.transferId,
+    rawJson: JSON.stringify({
+      request: { ...input.transferPlan, intentId: input.intentId, dryRun: false },
+      response: transfer.raw,
+      exchangeTransferType: input.transferPlan.exchange === "binance"
+        ? toBinanceType(input.transferPlan.fromAccount, input.transferPlan.toAccount) : undefined,
+    }),
   });
 
   // 15. fetch after balances with retry
@@ -172,7 +204,15 @@ export async function executeAutoTransferAndReaudit(input: {
     return { ok: false, status: "frozen", ledgerId, transfer, blockers: ["划转后余额读取失败"], warnings };
   }
 
-  await updateInternalTransferRecord(ledgerId, { status: "balance_confirmed" });
+  await updateInternalTransferRecord(ledgerId, { status: "balance_confirmed",
+    rawJson: JSON.stringify({
+      request: { ...input.transferPlan, intentId: input.intentId, dryRun: false },
+      response: transfer.raw,
+      balanceDelta: { before: beforeBalances, after: afterBalances },
+      exchangeTransferType: input.transferPlan.exchange === "binance"
+        ? toBinanceType(input.transferPlan.fromAccount, input.transferPlan.toAccount) : undefined,
+    }),
+  });
 
   // 16. verify balance change direction
   try {
@@ -205,7 +245,17 @@ export async function executeAutoTransferAndReaudit(input: {
     return { ok: false, status: "frozen", ledgerId, transfer, afterBalances, blockers: ["重新最终审计失败"], warnings };
   }
 
-  await updateInternalTransferRecord(ledgerId, { status: "reaudit_passed" });
+  await updateInternalTransferRecord(ledgerId, {
+    status: "reaudit_passed",
+    rawJson: JSON.stringify({
+      request: { ...input.transferPlan, intentId: input.intentId, dryRun: false },
+      response: transfer.raw,
+      balanceDelta: { before: beforeBalances, after: afterBalances },
+      reaudit,
+      exchangeTransferType: input.transferPlan.exchange === "binance"
+        ? toBinanceType(input.transferPlan.fromAccount, input.transferPlan.toAccount) : undefined,
+    }),
+  });
 
   return {
     ok: true, status: "reaudit_passed", ledgerId, transfer, beforeBalances, afterBalances, reaudit,

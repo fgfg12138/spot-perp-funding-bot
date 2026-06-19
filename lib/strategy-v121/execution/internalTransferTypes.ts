@@ -54,6 +54,7 @@ export interface InternalTransferLedgerRecord {
   idempotencyKey: string;
   transferId?: string;
   error?: string;
+  exchangeTransferType?: string;
   createdAtUtc: string;
   updatedAtUtc: string;
   rawJson?: string;

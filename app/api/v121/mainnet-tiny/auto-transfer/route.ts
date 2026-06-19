@@ -7,6 +7,17 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const dryRun = body.dryRun !== false; // 默认 dry-run
 
+    // Explicit confirm required for real execution
+    if (dryRun === false) {
+      if (body.explicitConfirm !== "EXECUTE_REAL_INTERNAL_TRANSFER") {
+        return NextResponse.json({
+          ok: false, status: "blocked",
+          blockers: ["explicit_confirm_required"],
+          warnings: [],
+        }, { status: 400 });
+      }
+    }
+
     const result = await executeAutoTransferAndReaudit({
       intentId: body.intentId,
       decisionId: body.decisionId,
