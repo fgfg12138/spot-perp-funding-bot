@@ -108,4 +108,10 @@ export class OkxAccountAdapter implements IAccountAdapter {
     // OKX 内部划转 endpoint 待核对文档后再实现
     return { ok: false, status: "failed", exchange: "okx", asset: "USDT", fromAccount: request.fromAccount, toAccount: request.toAccount, amountUsdt: request.amountUsdt, idempotencyKey: request.idempotencyKey, error: "real_internal_transfer_not_implemented", warnings: [] };
   }
+
+  async validateOrderPlan(_plan: import("../../execution/orderTypes").TwoLegOrderPlan): Promise<{
+    ok: boolean; blockers: string[]; warnings: string[]; raw?: unknown;
+  }> {
+    return { ok: false, blockers: ["okx_validate_order_plan_not_implemented"], warnings: [] };
+  }
 }

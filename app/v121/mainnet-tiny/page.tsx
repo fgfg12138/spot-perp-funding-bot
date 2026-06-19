@@ -9,6 +9,9 @@ export default function MainnetTinyPage() {
   const [blocked, setBlocked] = useState<any[]>([]);
   const [settings, setSettings] = useState<any>(null);
   const [execDecision, setExecDecision] = useState<any>(null);
+  const [orderPlans, setOrderPlans] = useState<any[]>([]);
+  const [orderPlanResult, setOrderPlanResult] = useState<any>(null);
+  const [orderPlanLoading, setOrderPlanLoading] = useState(false);
 
   useEffect(() => {
     fetch("/api/v121/mainnet-tiny/gate").then(r => r.json()).then(setGate).catch(() => {});
@@ -17,6 +20,7 @@ export default function MainnetTinyPage() {
     fetch("/api/v121/mainnet-tiny/blocked-attempts").then(r => r.json()).then(d => setBlocked(d.attempts ?? [])).catch(() => {});
     fetch("/api/v121/mainnet-tiny/orchestrator").then(r => r.json()).then(setExecDecision).catch(() => {});
     fetch("/api/v121/settings").then(r => r.json()).then(setSettings).catch(() => {});
+    fetch("/api/v121/mainnet-tiny/order-plan").then(r => r.json()).then(d => setOrderPlans(d.records ?? [])).catch(() => {});
   }, []);
 
   return (
@@ -191,6 +195,73 @@ export default function MainnetTinyPage() {
             ))}
           </div>
         )}
+      </section>
+
+      {/* 下单前执行门禁 */}
+      <section className="bg-gray-900 rounded-lg border border-gray-800 p-4 mb-4">
+        <h3 className="text-lg font-semibold mb-3 text-purple-400">下单前执行门禁</h3>
+        <div className="text-sm space-y-2">
+          <div className="flex justify-between"><span className="text-gray-400">safeExecution 状态</span><span className="font-mono">{execDecision?.state ?? "—"}</span></div>
+          <div className="flex justify-between"><span className="text-gray-400">autoTransferExecutable</span><span className={execDecision?.autoTransferExecutable ? "text-green-400" : "text-gray-500"}>{execDecision?.autoTransferExecutable ? "✅" : "❌"}</span></div>
+          <div className="flex justify-between"><span className="text-gray-400">allowRealOrders</span><span className="text-red-400 font-bold">false（强制）</span></div>
+          <div className="flex justify-between"><span className="text-gray-400">HTX / OKX</span><span className="text-red-400">阻断</span></div>
+        </div>
+        <div className="flex gap-2 mt-3">
+          <button onClick={async () => {
+            setOrderPlanLoading(true);
+            try {
+              const r = await fetch("/api/v121/mainnet-tiny/order-plan", {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ intentId: intents[0]?.id, exchange: "binance", symbol: intents[0]?.symbol ?? "BTC/USDT", plannedNotionalUsdt: 10 }),
+              });
+              const d = await r.json();
+              setOrderPlanResult(d);
+              fetch("/api/v121/mainnet-tiny/order-plan").then(r2 => r2.json()).then(d2 => setOrderPlans(d2.records ?? [])).catch(() => {});
+            } finally { setOrderPlanLoading(false); }
+          }} disabled={orderPlanLoading} className="border border-purple-500/60 bg-purple-500/15 text-purple-200 px-3 py-1.5 text-sm rounded disabled:opacity-30">
+            {orderPlanLoading ? "生成中..." : "生成下单计划"}
+          </button>
+          <button onClick={async () => {
+            const latestPlan = orderPlans[0];
+            if (!latestPlan) return;
+            const r = await fetch("/api/v121/mainnet-tiny/order-plan/test", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ orderPlanId: latestPlan.id }),
+            });
+            const d = await r.json();
+            alert(d.ok ? `校验通过 (${d.warnings?.join(", ") ?? "无警告"})` : `校验失败: ${(d.blockers ?? []).join(", ")}`);
+          }} disabled={orderPlans.length === 0} className="border border-cyan-500/60 bg-cyan-500/15 text-cyan-200 px-3 py-1.5 text-sm rounded disabled:opacity-30">Spot test order 校验</button>
+        </div>
+
+        {orderPlanResult && (
+          <div className="mt-3 p-2 bg-gray-800 rounded text-xs font-mono space-y-1">
+            <div className={orderPlanResult.ok ? "text-green-400" : "text-red-400"}>{orderPlanResult.ok ? "✅ validated" : `⛔ ${orderPlanResult.status}`}</div>
+            {orderPlanResult.orderPlan && (
+              <>
+                <div className="text-gray-400">Spot: {orderPlanResult.orderPlan.spotLeg.quantity.toFixed(6)} @ ${orderPlanResult.orderPlan.spotLeg.estimatedPrice.toFixed(2)} = ${orderPlanResult.orderPlan.spotLeg.quoteNotionalUsdt.toFixed(2)}</div>
+                <div className="text-gray-400">Perp: {orderPlanResult.orderPlan.perpLeg.quantity.toFixed(6)} @ ${orderPlanResult.orderPlan.perpLeg.estimatedPrice.toFixed(2)} = ${orderPlanResult.orderPlan.perpLeg.quoteNotionalUsdt.toFixed(2)}</div>
+                <div className="text-gray-500">clientOrderId: spot={orderPlanResult.orderPlan.spotLeg.clientOrderId} / perp={orderPlanResult.orderPlan.perpLeg.clientOrderId}</div>
+                <div className="text-red-400 font-bold">allowedForActualOrder: false</div>
+              </>
+            )}
+            {orderPlanResult.blockers?.length > 0 && <div className="text-red-400">blockers: {orderPlanResult.blockers.join(", ")}</div>}
+          </div>
+        )}
+
+        {orderPlans.length > 0 && (
+          <div className="mt-3 border-t border-gray-700 pt-2">
+            <div className="text-xs text-gray-500 mb-1">最近订单计划 ({orderPlans.length}):</div>
+            {orderPlans.slice(0, 3).map((p: any) => (
+              <div key={p.id} className="text-xs text-gray-500 flex justify-between">
+                <span>{p.symbol} {p.status}</span>
+                <span className={p.allowedForActualOrder === false ? "text-red-400" : "text-green-400"}>{p.allowedForActualOrder !== false ? "⚠️" : "✅ locked"}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        <p className="text-xs text-gray-600 mt-3 border-t border-gray-800 pt-2">
+          当前只生成下单计划，不会真实下单。即使校验通过，allowedForActualOrder 仍然是 false。
+        </p>
       </section>
     </div>
   );

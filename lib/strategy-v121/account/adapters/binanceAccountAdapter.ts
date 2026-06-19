@@ -169,4 +169,51 @@ export class BinanceAccountAdapter implements IAccountAdapter {
       };
     }
   }
+
+  async validateOrderPlan(plan: import("../../execution/orderTypes").TwoLegOrderPlan): Promise<{
+    ok: boolean; blockers: string[]; warnings: string[]; raw?: unknown;
+  }> {
+    const blockers: string[] = [];
+    const warnings: string[] = [];
+    const raw: Record<string, unknown> = { spotTest: null };
+
+    if (plan.exchange !== "binance") {
+      blockers.push("validateOrderPlan only supports binance");
+      return { ok: false, blockers, warnings };
+    }
+
+    // Spot leg: call POST /api/v3/order/test (does not enter matching engine)
+    try {
+      const spotParams: Record<string, string> = {
+        symbol: plan.spotLeg.symbol.replace("/", ""),
+        side: plan.spotLeg.side,
+        type: plan.spotLeg.type,
+        quoteOrderQty: plan.spotLeg.quoteNotionalUsdt.toFixed(8),
+        newClientOrderId: plan.spotLeg.clientOrderId,
+        timestamp: String(utcTimestampMs()),
+        recvWindow: "5000",
+      };
+      const spotResult = await this.signedPost(SPOT, "/api/v3/order/test", spotParams);
+      raw.spotTest = spotResult;
+    } catch (e: any) {
+      const msg = e.message ?? String(e);
+      if (msg.includes("binance_universal_transfer_permission_required")) {
+        blockers.push(msg);
+      } else {
+        blockers.push(`spot test order failed: ${msg}`);
+      }
+      raw.spotTest = { error: msg };
+    }
+
+    // Perp leg: local validation only (no /fapi/v1/order/test)
+    if (plan.perpLeg.quantity <= 0) blockers.push("perp quantity <= 0");
+    if (plan.perpLeg.quoteNotionalUsdt < (plan.perpLeg.constraints.minNotional ?? 5)) {
+      blockers.push(`perp notional < minNotional`);
+    }
+    if (plan.perpLeg.clientOrderId.length > 36) {
+      blockers.push("perp clientOrderId exceeds 36 chars");
+    }
+
+    return { ok: blockers.length === 0, blockers, warnings, raw };
+  }
 }

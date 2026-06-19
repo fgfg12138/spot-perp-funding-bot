@@ -103,6 +103,24 @@ export const EXTRA_TABLES: Record<string, string> = {
       updated_at_utc TEXT NOT NULL
     );
   `,
+  ORDER_PLAN_LEDGER: `
+    CREATE TABLE IF NOT EXISTS order_plan_ledger (
+      id TEXT PRIMARY KEY,
+      intent_id TEXT,
+      decision_id TEXT,
+      exchange TEXT NOT NULL,
+      symbol TEXT NOT NULL,
+      planned_notional_usdt REAL NOT NULL,
+      status TEXT NOT NULL,
+      allowed_for_actual_order INTEGER NOT NULL DEFAULT 0,
+      raw_json TEXT NOT NULL,
+      created_at_utc TEXT NOT NULL,
+      expires_at_utc TEXT NOT NULL,
+      updated_at_utc TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_order_plan_ledger_intent_id ON order_plan_ledger(intent_id);
+    CREATE INDEX IF NOT EXISTS idx_order_plan_ledger_status ON order_plan_ledger(status);
+  `,
 };
 
 export function getExtraCreateSQL(): string[] {
@@ -115,4 +133,5 @@ export const ALL_TABLE_NAMES = [
   "paper_executions", "latest_scan", "order_intents",
   "blocked_execution_attempts", "worker_heartbeat",
   "user_strategy_settings", "internal_transfer_ledger",
+  "order_plan_ledger",
 ];
