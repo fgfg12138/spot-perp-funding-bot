@@ -69,4 +69,14 @@ describe("HtxPublicAdapter", () => {
     vi.spyOn(adapter as any, "fetchJson").mockRejectedValue(new Error("down"));
     expect(await adapter.getTradingStatus("btcusdt")).toBe("halt");
   });
+
+  it("fetchTickerSwap throws on swap endpoint failure (not fake snapshot)", async () => {
+    vi.spyOn(adapter as any, "fetchJsonSwap").mockRejectedValue(new Error("htx_swap_ticker_unavailable"));
+    await expect(adapter.fetchTickerSwap("BTC-USDT")).rejects.toThrow("htx_swap_ticker_unavailable");
+  });
+
+  it("fetchOrderBookSwap throws on swap endpoint failure (not fake snapshot)", async () => {
+    vi.spyOn(adapter as any, "fetchJsonSwap").mockRejectedValue(new Error("htx_swap_depth_unavailable"));
+    await expect(adapter.fetchOrderBookSwap("BTC-USDT")).rejects.toThrow("htx_swap_depth_unavailable");
+  });
 });

@@ -4,6 +4,16 @@
 
 This runbook prepares the system for controlled live testing. It does **not** authorize unattended trading.
 
+## Exchange Readiness Scope
+
+CONTROLLED_LIVE readiness is **Binance-only** until explicitly expanded.
+
+- Binance read-only smoke failure is **blocking**.
+- Binance internal transfer gate must remain disabled by default.
+- Binance real order execution gate must remain disabled by default.
+- OKX remains read-only / future expansion unless explicitly enabled.
+- HTX is **observe-only**. HTX smoke failures are warnings and must not enable execution.
+
 ## Required Green Checks
 
 Before any controlled live activity, all of the following must pass:
