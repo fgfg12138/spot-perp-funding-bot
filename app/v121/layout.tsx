@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 const NAV_ITEMS = [
   { href: "/v121/dashboard", label: "控制台" },
   { href: "/v121/opportunities", label: "机会池" },
+  { href: "/v121/intents", label: "执行意图" },
   { href: "/v121/execution", label: "执行中心" },
   { href: "/v121/positions", label: "持仓监控" },
   { href: "/v121/risk-center", label: "风控中心" },
