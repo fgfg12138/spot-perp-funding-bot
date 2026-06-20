@@ -1,53 +1,104 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import {
+  DEFAULT_USER_STRATEGY_SETTINGS,
+  normalizeSettings,
+  type UserStrategySettings,
+} from "@/lib/strategy-v121/settings/userStrategySettings";
 
-const DEFAULT_SETTINGS = {
-  version: 1,
-  funding: { minFundingRate8h: 0.0005, minNetProfitRate: 0, minSecondsToFunding: 300 },
-  notional: { plannedNotionalUsdt: 10, maxOrderNotionalUsdt: 50, maxSymbolExposureUsdt: 50, maxExchangeExposureUsdt: 100, allowAutoDownsize: true },
-  capital: { globalReserveRate: 0.2, minGlobalReserveUsdt: 10, spotBufferRate: 0.015, perpBufferRate: 0.035 },
-  transfer: { allowAutoTransfer: false, mode: "disabled" as const, maxAutoTransferUsdt: 50, allowSpotToPerp: true, allowPerpToSpot: true, requireReauditAfterTransfer: true },
-  universe: { useDynamicUniverse: true, maxDynamicSymbolsPerExchange: 50, minSpotVolume24hUsdt: 0, minPerpVolume24hUsdt: 0, allowSmallCaps: false, symbolWhitelist: [] as string[], symbolBlacklist: [] as string[], prioritySymbols: [] as string[] },
-  execution: { requireHumanApproval: true, allowRealOrders: false, maxLegDeviationRate: 0.01, orderTimeoutMs: 15000, freezeOnUnknownOrder: true, freezeOnUnknownTransfer: true },
-};
+const DEFAULT_SETTINGS = DEFAULT_USER_STRATEGY_SETTINGS;
 
 export default function SettingsPage() {
-  const [s, setS] = useState<any>(null);
+  const [s, setS] = useState<UserStrategySettings | null>(null);
   const [ks, setKs] = useState<any>(null);
   const [msg, setMsg] = useState("");
 
   useEffect(() => {
-    fetch("/api/v121/settings").then(r => r.json()).then(setS).catch(() => {});
-    fetch("/api/v121/risk/kill-switch").then(r => r.json()).then(setKs).catch(() => {});
+    fetch("/api/v121/settings")
+      .then((r) => r.json())
+      .then((d) => {
+        setS(normalizeSettings(d.settings ?? d));
+      })
+      .catch(() => {
+        setS(DEFAULT_SETTINGS);
+      });
+
+    fetch("/api/v121/risk/kill-switch")
+      .then((r) => r.json())
+      .then(setKs)
+      .catch(() => {});
   }, []);
 
   const patch = (path: string, val: any) => {
-    setS((prev: any) => {
-      if (!prev) return prev;
-      const copy = JSON.parse(JSON.stringify(prev));
+    setS((prev) => {
+      const base = normalizeSettings(prev ?? DEFAULT_SETTINGS);
+      const copy: any = JSON.parse(JSON.stringify(base));
       const parts = path.split(".");
       let cur = copy;
-      for (let i = 0; i < parts.length - 1; i++) cur = cur[parts[i]];
+
+      for (let i = 0; i < parts.length - 1; i++) {
+        const key = parts[i];
+        if (!cur[key] || typeof cur[key] !== "object") {
+          cur[key] = {};
+        }
+        cur = cur[key];
+      }
+
       cur[parts[parts.length - 1]] = val;
-      return copy;
+      return normalizeSettings(copy);
     });
   };
 
   const save = async () => {
     try {
-      const r = await fetch("/api/v121/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(s) });
-      if (r.ok) { setMsg("保存成功"); setTimeout(() => setMsg(""), 2000); }
-      else { const d = await r.json(); setMsg(`保存失败: ${d.error ?? d}`); }
-    } catch (e: any) { setMsg(`保存失败: ${e.message}`); }
+      const payload = normalizeSettings(s ?? DEFAULT_SETTINGS);
+
+      const r = await fetch("/api/v121/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const d = await r.json();
+
+      if (r.ok && d.ok) {
+        setS(normalizeSettings(d.settings ?? payload));
+        setMsg("保存成功");
+        setTimeout(() => setMsg(""), 2000);
+      } else {
+        const errors = d.errors ?? [d.error ?? JSON.stringify(d)];
+        setMsg(`保存失败: ${errors.join("; ")}`);
+      }
+    } catch (e: any) {
+      setMsg(`保存失败: ${e.message}`);
+    }
   };
 
   const restore = async () => {
-    setS(DEFAULT_SETTINGS);
+    const defaults = normalizeSettings(DEFAULT_SETTINGS);
+    setS(defaults);
+
     try {
-      const r = await fetch("/api/v121/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(DEFAULT_SETTINGS) });
-      if (r.ok) setMsg("已恢复默认值");
-    } catch (e: any) { setMsg(`恢复失败: ${e.message}`); }
+      const r = await fetch("/api/v121/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(defaults),
+      });
+
+      const d = await r.json();
+
+      if (r.ok && d.ok) {
+        setS(normalizeSettings(d.settings ?? defaults));
+        setMsg("已恢复默认值");
+        setTimeout(() => setMsg(""), 2000);
+      } else {
+        const errors = d.errors ?? [d.error ?? JSON.stringify(d)];
+        setMsg(`恢复失败: ${errors.join("; ")}`);
+      }
+    } catch (e: any) {
+      setMsg(`恢复失败: ${e.message}`);
+    }
   };
 
   if (!s) return <div className="text-gray-500 p-4">加载中...</div>;
@@ -68,7 +119,7 @@ export default function SettingsPage() {
           <div className="flex gap-2 flex-wrap">
             {(["READ_ONLY", "PAPER", "SHADOW", "MAINNET_TINY", "CONTROLLED_LIVE"] as const).map((mode) => (
               <span key={mode} className={`px-3 py-1 rounded text-sm font-medium ${
-                mode === s?.mode ? "bg-cyan-900 text-cyan-300" : "bg-gray-800 text-gray-500"
+                false ? "bg-cyan-900 text-cyan-300" : "bg-gray-800 text-gray-500"
               }`}>
                 {mode}
                 {(mode === "MAINNET_TINY" || mode === "CONTROLLED_LIVE") && " 🔒"}
@@ -100,7 +151,7 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        {/* 资金费门槛 */}
+        {/* 资金费与成交额 */}
         <section className="bg-gray-900 rounded-lg border border-gray-800 p-4">
           <h3 className="text-lg font-semibold mb-3 text-green-400">资金费与成交额</h3>
           <div className="grid grid-cols-2 gap-3 text-sm">
