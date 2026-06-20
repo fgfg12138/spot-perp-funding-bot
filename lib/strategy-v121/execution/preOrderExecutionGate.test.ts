@@ -133,4 +133,23 @@ describe("runPreOrderExecutionGate", () => {
     (runSafeExecutionDecision as any).mockResolvedValue({ state: "HUMAN_APPROVAL_REQUIRED", needsAutoTransfer: false, blockers: [] });
     (listRecentInternalTransfers as any).mockResolvedValue([{ status: "reaudit_passed" }]);
   });
+
+  // ── Input validation tests ─────────────────────────────────
+  it("rejects empty symbol", async () => {
+    const r = await runPreOrderExecutionGate({ ...baseInput, symbol: "" });
+    expect(r.ok).toBe(false);
+    expect(r.blockers.some((b: string) => b.includes("symbol"))).toBe(true);
+  });
+
+  it("rejects non-positive plannedNotionalUsdt", async () => {
+    const r = await runPreOrderExecutionGate({ ...baseInput, plannedNotionalUsdt: 0 });
+    expect(r.ok).toBe(false);
+    expect(r.blockers.some((b: string) => b.includes("positive"))).toBe(true);
+  });
+
+  it("rejects negative plannedNotionalUsdt", async () => {
+    const r = await runPreOrderExecutionGate({ ...baseInput, plannedNotionalUsdt: -5 });
+    expect(r.ok).toBe(false);
+    expect(r.blockers.some((b: string) => b.includes("positive"))).toBe(true);
+  });
 });
