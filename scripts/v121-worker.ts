@@ -28,6 +28,10 @@ function main() {
   console.log(`  Mode: ${mode}`);
   console.log(`  Dry run: ${dryRun}`);
   console.log(`  Interval: ${intervalMs / 1000}s`);
+  console.log(`  Persistence: ${process.env.V121_PERSISTENCE_MODE ?? "jsonl-dev-only"}`);
+  console.log(`  SQLite path: ${process.env.V121_SQLITE_PATH ?? ".v121-data/v121.sqlite"}`);
+  console.log(`  Dynamic universe: ${process.env.V121_WORKER_USE_DYNAMIC_UNIVERSE ?? "false"}`);
+  console.log(`  Scan mode: ${process.env.V121_WORKER_SCAN_MODE ?? "fixed/default"}`);
 
   worker.start();
 
