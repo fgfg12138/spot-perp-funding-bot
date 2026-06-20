@@ -64,6 +64,14 @@ export class SqliteRepository {
         "created_at_utc INTEGER",
         "updated_at_utc INTEGER",
       ],
+      worker_heartbeat: [
+        "worker_id TEXT",
+        "state TEXT DEFAULT 'stopped'",
+        "mode TEXT",
+        "last_cycle_at_utc INTEGER",
+        "cycle_count INTEGER DEFAULT 0",
+        "last_error TEXT",
+      ],
     };
     for (const [table, columns] of Object.entries(patches)) {
       for (const col of columns) {
