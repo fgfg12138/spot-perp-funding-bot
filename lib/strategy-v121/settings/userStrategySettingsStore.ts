@@ -44,11 +44,13 @@ export async function saveSettingsPatch(patch: unknown): Promise<{
 
   const existing = repo.queryAll("user_strategy_settings") as any[];
   const row = existing.find((r: any) => r.id === SETTINGS_KEY);
+  const json = JSON.stringify(merged);
 
   repo.save("user_strategy_settings", {
     id: SETTINGS_KEY,
-    json: JSON.stringify(merged),
-    created_at_utc: row?.created_at_utc ?? now,
+    json,
+    settings_json: json,
+    created_at_utc: row?.created_at_utc ?? row?.createdAtUtc ?? now,
     updated_at_utc: now,
   } as any);
 

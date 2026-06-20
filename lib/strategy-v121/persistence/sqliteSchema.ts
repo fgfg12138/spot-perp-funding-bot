@@ -52,6 +52,9 @@ export const EXTRA_TABLES: Record<string, string> = {
       manualConfirmPassed INTEGER DEFAULT 0,
       dryRun INTEGER DEFAULT 1,
       realOrderExecutionEnabled INTEGER DEFAULT 0,
+      purpose TEXT DEFAULT 'real_arbitrage',
+      simulationOnly INTEGER DEFAULT 0,
+      realTradeEligible INTEGER DEFAULT 0,
       dataSource TEXT DEFAULT 'order_intent'
     );
   `,
@@ -79,7 +82,8 @@ export const EXTRA_TABLES: Record<string, string> = {
   USER_STRATEGY_SETTINGS: `
     CREATE TABLE IF NOT EXISTS user_strategy_settings (
       id TEXT PRIMARY KEY,
-      json TEXT NOT NULL,
+      json TEXT,
+      settings_json TEXT,
       created_at_utc INTEGER NOT NULL,
       updated_at_utc INTEGER NOT NULL
     );

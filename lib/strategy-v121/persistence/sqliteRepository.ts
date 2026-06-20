@@ -53,10 +53,14 @@ export class SqliteRepository {
         "manualConfirmPassed INTEGER DEFAULT 0",
         "dryRun INTEGER DEFAULT 1",
         "realOrderExecutionEnabled INTEGER DEFAULT 0",
+        "purpose TEXT DEFAULT 'real_arbitrage'",
+        "simulationOnly INTEGER DEFAULT 0",
+        "realTradeEligible INTEGER DEFAULT 0",
         "dataSource TEXT DEFAULT 'order_intent'",
       ],
       user_strategy_settings: [
         "json TEXT",
+        "settings_json TEXT",
         "created_at_utc INTEGER",
         "updated_at_utc INTEGER",
       ],
@@ -95,7 +99,7 @@ export class SqliteRepository {
       const rows = this.db.prepare(`SELECT * FROM "${table}" ORDER BY rowid`).all() as Record<string, unknown>[];
       return rows.map(row => {
         const result: Record<string, unknown> = {};
-        const boolCols = new Set(["gateAllowed","requiresManualConfirm","manualConfirmPassed","dryRun","realOrderExecutionEnabled","passed","allowHtx","allowSmallCaps","allowCrossExchange","requireManualConfirm","allowAutoEntry","allowRiskExit","immutable","isTestThreshold"]);
+        const boolCols = new Set(["gateAllowed","requiresManualConfirm","manualConfirmPassed","dryRun","realOrderExecutionEnabled","simulationOnly","realTradeEligible","passed","allowHtx","allowSmallCaps","allowCrossExchange","requireManualConfirm","allowAutoEntry","allowRiskExit","immutable","isTestThreshold"]);
         for (const [k, v] of Object.entries(row)) {
           if (typeof v === "string" && (v.startsWith("[") || v.startsWith("{"))) {
             try { result[k] = JSON.parse(v); } catch { result[k] = v; }
