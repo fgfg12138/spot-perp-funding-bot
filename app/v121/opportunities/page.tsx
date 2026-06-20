@@ -2,6 +2,18 @@
 
 import { useEffect, useState } from "react";
 
+function fmtNum(v: unknown, digits = 2, fallback = "—") {
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n.toFixed(digits) : fallback;
+}
+
+function describeDataSource(dataSource: string | undefined) {
+  if (dataSource === "real_market") return { marketSource: "真实交易所行情", universeMode: "固定/默认池", ok: true };
+  if (dataSource === "dynamic_same_exchange_universe") return { marketSource: "真实交易所行情", universeMode: "动态同所池", ok: true };
+  if (dataSource === "no_data") return { marketSource: "无数据", universeMode: "—", ok: false };
+  return { marketSource: dataSource ?? "未知", universeMode: "未知", ok: false };
+}
+
 export default function OpportunitiesPage() {
   const [data, setData] = useState<any>(null);
   const [scanning, setScanning] = useState(false);
@@ -99,7 +111,11 @@ export default function OpportunitiesPage() {
       {data && (
         <div className="text-xs text-gray-500 mb-4 space-y-1">
           <div>最近扫描: {data.scannedAtUtc ? new Date(data.scannedAtUtc).toLocaleString("zh-CN") : "未扫描"} | 耗时: {data.durationMs ? `${data.durationMs}ms` : "—"}</div>
-          <div>数据源: {data.dataSource === "real_market" ? "实时行情" : data.dataSource === "no_data" ? "无数据" : "含错误的实时行情"}</div>
+          {(() => { const s = describeDataSource(data?.dataSource); return (<>
+            <div>行情来源: {s.marketSource}</div>
+            <div>币种池模式: {s.universeMode}</div>
+            <div className={s.ok ? "text-green-400" : "text-red-400"}>数据源状态: {s.ok ? "有效" : "异常"}</div>
+          </>); })()}
           <div>总路径: {data.totalPaths ?? data.total ?? 0} | 通过: {data.passedCount ?? 0} | 淘汰: {data.rejectedCount ?? 0}</div>
           {data.rejectSummary && Object.keys(data.rejectSummary).length > 0 && (
             <div>主要淘汰原因: {Object.entries(data.rejectSummary as Record<string, number>).slice(0, 5).map(([k, v]) => `${k}: ${v}`).join(", ")}</div>
@@ -137,8 +153,8 @@ export default function OpportunitiesPage() {
                   <td className="py-1">{o.path?.symbol ?? o.symbol ?? "—"}</td>
                   <td className="py-1">{o.path?.spotExchange ?? o.spotExchange ?? "—"}</td>
                   <td className="py-1">{o.path?.perpExchange ?? o.perpExchange ?? "—"}</td>
-                  <td className="py-1 text-right">{(o.funding8h * 100).toFixed(3)}%</td>
-                  <td className="py-1 text-right">{(o.entryExecutableBasis * 100).toFixed(3)}%</td>
+                  <td className="py-1 text-right">{fmtNum(Number(o.funding8h) * 100, 3)}%</td>
+                  <td className="py-1 text-right">{fmtNum(Number(o.entryExecutableBasis) * 100, 3)}%</td>
                   <td className="py-1 text-right">{o.score ?? "—"}</td>
                   <td className="py-1 text-center">
                     <span className={`px-1.5 py-0.5 text-xs font-bold ${

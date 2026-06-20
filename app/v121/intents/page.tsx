@@ -2,6 +2,10 @@
 
 import { useEffect, useState } from "react";
 
+function toBool(v: unknown): boolean {
+  return v === true || v === 1 || v === "1" || v === "true";
+}
+
 export default function IntentsPage() {
   const [intents, setIntents] = useState<any[]>([]);
   const [filter, setFilter] = useState("all");
@@ -14,7 +18,7 @@ export default function IntentsPage() {
   }, []);
 
   const eligible = intents.filter(
-    (i) => i.purpose === "real_arbitrage" && i.simulationOnly !== true && i.realTradeEligible === true,
+    (i) => i.purpose === "real_arbitrage" && !toBool(i.simulationOnly) && toBool(i.realTradeEligible),
   );
 
   const filtered =
