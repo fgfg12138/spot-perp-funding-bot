@@ -241,14 +241,17 @@ export default function MainnetTinyPage() {
           </button>
           <button onClick={async () => {
             const latestPlan = orderPlans[0];
-            if (!latestPlan) return;
+            if (!latestPlan || latestPlan.status !== "validated") {
+              alert("只有 validated orderPlan 才能做 Spot test order 校验。");
+              return;
+            }
             const r = await fetch("/api/v121/mainnet-tiny/order-plan/test", {
               method: "POST", headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ orderPlanId: latestPlan.id }),
             });
             const d = await r.json();
-            alert(d.ok ? `校验通过 (${d.warnings?.join(", ") ?? "无警告"})` : `校验失败: ${(d.blockers ?? []).join(", ")}`);
-          }} disabled={orderPlans.length === 0} className="border border-cyan-500/60 bg-cyan-500/15 text-cyan-200 px-3 py-1.5 text-sm rounded disabled:opacity-30">Spot test order 校验</button>
+            alert(d.ok ? `校验通过 (${d.warnings?.join(", ") ?? "无警告"})` : `校验失败: ${(d.blockers ?? [d.error ?? "unknown"]).join(", ")}`);
+          }} disabled={!(() => { const p = orderPlans[0]; return p?.status === "validated" && p?.spotLeg && p?.perpLeg; })()} className="border border-cyan-500/60 bg-cyan-500/15 text-cyan-200 px-3 py-1.5 text-sm rounded disabled:opacity-30">Spot test order 校验</button>
         </div>
 
         {orderPlanResult && (
@@ -309,7 +312,7 @@ export default function MainnetTinyPage() {
             setExecResult(d);
             fetch("/api/v121/mainnet-tiny/order-execution").then(r2 => r2.json()).then(d2 => setOrderExecutions(d2.records ?? [])).catch(() => {});
             setExecLoading(false);
-          }} disabled={execLoading || !orderPlans[0]} className="border border-yellow-500/60 bg-yellow-500/15 text-yellow-200 px-3 py-1.5 text-sm rounded disabled:opacity-30">Dry-run 执行双腿下单</button>
+          }} disabled={execLoading || !(() => { const p = orderPlans[0]; return p?.status === "validated" && p?.spotLeg && p?.perpLeg; })()} className="border border-yellow-500/60 bg-yellow-500/15 text-yellow-200 px-3 py-1.5 text-sm rounded disabled:opacity-30">Dry-run 执行双腿下单</button>
           <button onClick={async () => {
             if (!orderPlans[0]) return;
             const phrase = window.prompt("输入 EXECUTE_REAL_TWO_LEG_ORDER 确认真实双腿下单。该操作会真实买入现货并开空永续。");

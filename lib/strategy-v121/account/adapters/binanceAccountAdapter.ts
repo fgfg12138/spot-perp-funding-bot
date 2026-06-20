@@ -181,6 +181,32 @@ export class BinanceAccountAdapter implements IAccountAdapter {
     const warnings: string[] = [];
     const raw: Record<string, unknown> = { spotTest: null };
 
+    if (plan.status !== "validated") {
+      return { ok: false, blockers: [`order plan status is ${plan.status}; only validated plans can be exchange-tested`], warnings, raw };
+    }
+
+    if (!plan.spotLeg) {
+      blockers.push("order plan missing spotLeg");
+      return { ok: false, blockers, warnings, raw };
+    }
+
+    if (!plan.perpLeg) {
+      blockers.push("order plan missing perpLeg");
+      return { ok: false, blockers, warnings, raw };
+    }
+
+    if (!Number.isFinite(plan.spotLeg.quoteNotionalUsdt) || plan.spotLeg.quoteNotionalUsdt <= 0) {
+      blockers.push("spotLeg.quoteNotionalUsdt must be positive");
+    }
+
+    if (!Number.isFinite(plan.perpLeg.quantity) || plan.perpLeg.quantity <= 0) {
+      blockers.push("perpLeg.quantity must be positive");
+    }
+
+    if (blockers.length > 0) {
+      return { ok: false, blockers, warnings, raw };
+    }
+
     if (plan.exchange !== "binance") {
       blockers.push("validateOrderPlan only supports binance");
       return { ok: false, blockers, warnings };
