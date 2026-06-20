@@ -16,3 +16,5 @@ build/
 .env*.local (1).next/
 * (1).next/
 * (1).*/
+audit-*.json
+audit-*.json
