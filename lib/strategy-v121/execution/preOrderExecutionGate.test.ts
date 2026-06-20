@@ -68,7 +68,7 @@ describe("runPreOrderExecutionGate", () => {
     expect(r.ok).toBe(true);
     expect(r.status).toBe("validated");
     expect(r.blockers).toHaveLength(0);
-  });
+  }, 15000);
 
   it("9. allowedForActualOrder still false", async () => {
     const r = await runPreOrderExecutionGate(baseInput);

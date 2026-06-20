@@ -16,7 +16,8 @@
     "v121:smoke": "npx tsx scripts/v121-smoke-market.ts",
     "v121:shadow:diag": "npx tsx scripts/v121-shadow-diagnostics.ts",
     "v121:tiny:dry-check": "npx tsx scripts/v121-mainnet-tiny-dry-run-check.ts",
-    "v121:verify": "npm run lint:i18n && npx tsc --noEmit -p tsconfig.ci.json && npx vitest run lib/strategy-v121 && npm run build"
+    "v121:verify": "npm run lint:i18n && npx tsc --noEmit -p tsconfig.ci.json && npx vitest run lib/strategy-v121 && npm run build",
+    "v121:product-smoke": "npx tsx scripts/v121-product-smoke.ts"
   },
   "dependencies": {
     "@tanstack/react-table": "^8.21.3",
