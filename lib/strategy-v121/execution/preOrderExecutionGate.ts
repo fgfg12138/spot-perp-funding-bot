@@ -21,6 +21,20 @@ export async function runPreOrderExecutionGate(input: {
   const blockers: string[] = [];
   const warnings: string[] = [];
   const evidence: Record<string, unknown> = {};
+  evidence.orderPlanInput = {
+    intentId: input.intentId ?? null,
+    exchange: input.exchange,
+    symbol: input.symbol,
+    plannedNotionalUsdt: input.plannedNotionalUsdt,
+  };
+
+  // Input validation
+  if (!input.symbol) {
+    return { ok: false, status: "blocked", blockers: ["symbol is required"], warnings, evidence };
+  }
+  if (!Number.isFinite(input.plannedNotionalUsdt) || input.plannedNotionalUsdt <= 0) {
+    return { ok: false, status: "blocked", blockers: ["plannedNotionalUsdt must be positive"], warnings, evidence };
+  }
 
   // 1. Load settings
   let settings: any;

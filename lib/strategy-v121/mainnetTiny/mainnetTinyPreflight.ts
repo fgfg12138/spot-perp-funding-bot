@@ -56,10 +56,12 @@ export function runMainnetTinyPreflight(): PreflightResult {
   add("扫描时效", scanAge < 5 * 60 * 1000, "warning",
     scanAge < 5 * 60 * 1000 ? "有效" : "过期");
 
-  // 7. Data source real_market
+  // 7. Data source — allowlist for valid sources
+  const ALLOWED_DATA_SOURCES = new Set(["real_market", "dynamic_same_exchange_universe", "worker_real_market"]);
   const scanDs = (scan as any)?.dataSource ?? (scan as any)?.data_source ?? "";
-  add("数据源", scanDs.includes("real_market"), "warning",
-    scanDs || "未知");
+  const dsOk = ALLOWED_DATA_SOURCES.has(String(scanDs));
+  add("数据源", dsOk, "warning",
+    dsOk ? `数据源有效: ${scanDs}` : `数据源不合格: ${scanDs}`);
 
   // 8-9. Worker heartbeat
   const hb = repo.latest("worker_heartbeat");

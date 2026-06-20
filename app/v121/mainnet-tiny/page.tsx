@@ -16,6 +16,13 @@ export default function MainnetTinyPage() {
   const [execResult, setExecResult] = useState<any>(null);
   const [execLoading, setExecLoading] = useState(false);
 
+  function isFiniteNumber(v: unknown): v is number {
+    return typeof v === "number" && Number.isFinite(v);
+  }
+  function fmt(v: unknown, digits = 2, fallback = "—") {
+    return isFiniteNumber(v) ? v.toFixed(digits) : fallback;
+  }
+
   useEffect(() => {
     fetch("/api/v121/mainnet-tiny/gate").then(r => r.json()).then(setGate).catch(() => {});
     fetch("/api/v121/mainnet-tiny/preflight").then(r => r.json()).then(setPreflight).catch(() => {});
@@ -214,9 +221,17 @@ export default function MainnetTinyPage() {
           <button onClick={async () => {
             setOrderPlanLoading(true);
             try {
+              const latestIntent = [...intents]
+                .sort((a: any, b: any) =>
+                  Number(b.createdAtUtc ?? b.created_at ?? b.ts ?? 0) -
+                  Number(a.createdAtUtc ?? a.created_at ?? a.ts ?? 0)
+                )[0] || {};
+              const intentId = latestIntent?.intentId ?? latestIntent?.id ?? "";
+              const sym = latestIntent?.symbol ?? "BTC/USDT";
+              const notional = Number(settings?.notional?.plannedNotionalUsdt ?? 10);
               const r = await fetch("/api/v121/mainnet-tiny/order-plan", {
                 method: "POST", headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ intentId: intents[0]?.id, exchange: "binance", symbol: intents[0]?.symbol ?? "BTC/USDT", plannedNotionalUsdt: 10 }),
+                body: JSON.stringify({ intentId, exchange: "binance", symbol: sym, plannedNotionalUsdt: notional }),
               });
               const d = await r.json();
               setOrderPlanResult(d);
@@ -240,14 +255,26 @@ export default function MainnetTinyPage() {
         {orderPlanResult && (
           <div className="mt-3 p-2 bg-gray-800 rounded text-xs font-mono space-y-1">
             <div className={orderPlanResult.ok ? "text-green-400" : "text-red-400"}>{orderPlanResult.ok ? "✅ validated" : `⛔ ${orderPlanResult.status}`}</div>
-            {orderPlanResult.orderPlan && (
-              <>
-                <div className="text-gray-400">Spot: {orderPlanResult.orderPlan.spotLeg.quantity.toFixed(6)} @ ${orderPlanResult.orderPlan.spotLeg.estimatedPrice.toFixed(2)} = ${orderPlanResult.orderPlan.spotLeg.quoteNotionalUsdt.toFixed(2)}</div>
-                <div className="text-gray-400">Perp: {orderPlanResult.orderPlan.perpLeg.quantity.toFixed(6)} @ ${orderPlanResult.orderPlan.perpLeg.estimatedPrice.toFixed(2)} = ${orderPlanResult.orderPlan.perpLeg.quoteNotionalUsdt.toFixed(2)}</div>
-                <div className="text-gray-500">clientOrderId: spot={orderPlanResult.orderPlan.spotLeg.clientOrderId} / perp={orderPlanResult.orderPlan.perpLeg.clientOrderId}</div>
-                <div className="text-red-400 font-bold">allowedForActualOrder: false</div>
-              </>
+            {orderPlanResult.error && <div className="text-red-400">error: {orderPlanResult.error}</div>}
+            {orderPlanResult.orderPlan?.spotLeg && (
+              <div className="text-gray-400">
+                Spot: {fmt(orderPlanResult.orderPlan.spotLeg.quantity, 6)}
+                {" "}@ ${fmt(orderPlanResult.orderPlan.spotLeg.estimatedPrice, 2)}
+                {" "}= ${fmt(orderPlanResult.orderPlan.spotLeg.quoteNotionalUsdt, 2)}
+              </div>
             )}
+            {orderPlanResult.orderPlan?.perpLeg && (
+              <div className="text-gray-400">
+                Perp: {fmt(orderPlanResult.orderPlan.perpLeg.quantity, 6)}
+                {" "}@ ${fmt(orderPlanResult.orderPlan.perpLeg.estimatedPrice, 2)}
+                {" "}= ${fmt(orderPlanResult.orderPlan.perpLeg.quoteNotionalUsdt, 2)}
+              </div>
+            )}
+            <div className="text-gray-500">
+              clientOrderId: spot={orderPlanResult.orderPlan?.spotLeg?.clientOrderId ?? "—"}
+              {" "}/ perp={orderPlanResult.orderPlan?.perpLeg?.clientOrderId ?? "—"}
+            </div>
+            {orderPlanResult.orderPlan && <div className="text-red-400 font-bold">allowedForActualOrder: false</div>}
             {orderPlanResult.blockers?.length > 0 && <div className="text-red-400">blockers: {orderPlanResult.blockers.join(", ")}</div>}
           </div>
         )}

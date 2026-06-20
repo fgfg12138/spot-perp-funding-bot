@@ -75,8 +75,9 @@ export async function runFinalPreExecutionAudit(): Promise<FinalAuditResult> {
   const scanTs = Number(scan?.scannedAtUtc ?? scan?.scanned_at_utc ?? 0);
   const scanAge = scanTs > 0 ? (Date.now() - scanTs) / 1000 : Infinity;
   if (scanAge > 300) blockers.push(`最新 scan ${Math.round(scanAge)} 秒前 > 5 分钟`);
+  const ALLOWED_DATA_SOURCES = new Set(["real_market", "dynamic_same_exchange_universe", "worker_real_market"]);
   const ds = String(scan?.dataSource ?? scan?.data_source ?? "");
-  if (!ds.includes("real_market")) blockers.push("数据源不是 real_market");
+  if (!ALLOWED_DATA_SOURCES.has(ds)) blockers.push(`数据源不合格: ${ds}`);
 
   const alerts = (repo.queryAll("opportunity_alerts") as any[]).filter(
     (a: any) => a.status === "new" || a.status === "acknowledged",
