@@ -6,8 +6,6 @@ export default function OpportunitiesPage() {
   const [data, setData] = useState<any>(null);
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
-  const [rehearsal, setRehearsal] = useState<any>(null);
-  const [rehearsalLoading, setRehearsalLoading] = useState(false);
   const [universe, setUniverse] = useState<any>(null);
   const [universeLoading, setUniverseLoading] = useState(false);
 
@@ -39,13 +37,8 @@ export default function OpportunitiesPage() {
     fetch("/api/v121/opportunities").then(r => r.json()).then(setData).catch(() => {});
   };
 
-  useEffect(() => { fetchOpps(); fetchRehearsal(); }, []);
+  useEffect(() => { fetchOpps(); }, []);
 
-  const fetchRehearsal = () => {
-    fetch("/api/v121/opportunities/rehearsal-candidate").then(r => r.json()).then(d => {
-      if (d.id) setRehearsal(d);
-    }).catch(() => {});
-  };
 
   const doScan = async () => {
     setScanning(true);
@@ -171,42 +164,6 @@ export default function OpportunitiesPage() {
         )}
       </div>
 
-      {/* 执行链路模拟候选 */}
-      {rehearsal && (
-        <div className="bg-gray-900 rounded-lg border border-amber-800/60 p-4 mt-4">
-          <h3 className="text-lg font-semibold mb-3 text-amber-400">🔧 执行链路模拟候选</h3>
-          <div className="bg-amber-950/30 border border-amber-700/50 rounded p-2 mb-3 text-xs text-amber-300">
-            ⚠️ 该候选仅用于模拟测试，不满足正式套利门槛，不允许真实下单。
-          </div>
-          <div className="grid grid-cols-2 gap-2 text-sm mb-3">
-            <div><span className="text-gray-400">币种:</span> {rehearsal.symbol}</div>
-            <div><span className="text-gray-400">交易所:</span> {rehearsal.exchange}</div>
-            <div><span className="text-gray-400">funding_8h:</span> {(rehearsal.funding8h * 100).toFixed(3)}%</div>
-            <div><span className="text-gray-400">预期净收益:</span> <span className={rehearsal.expectedNetRate >= 0 ? "text-green-400" : "text-red-400"}>{(rehearsal.expectedNetRate * 100).toFixed(3)}%</span></div>
-            <div><span className="text-gray-400">手续费估算:</span> {rehearsal.feeCostEstimate?.toFixed(4) ?? "—"}</div>
-            <div><span className="text-gray-400">simulationOnly:</span> <span className="text-amber-400">true</span></div>
-          </div>
-          <button
-            onClick={async () => {
-              setRehearsalLoading(true);
-              const r = await fetch("/api/v121/opportunities/rehearsal-candidate/dry-run-intent", { method: "POST" });
-              const d = await r.json();
-              const msg = d.intentId
-                ? `Dry-run intent 已生成: ${d.intentId}`
-                : `失败: ${d.error || "未知"}\n${d.detail || ""}\n${d.stack || ""}`;
-              alert(msg);
-              setRehearsalLoading(false);
-            }}
-            disabled={rehearsalLoading}
-            className="border border-amber-400/60 bg-amber-400/15 text-amber-100 px-3 py-1 text-xs disabled:opacity-50"
-          >
-            {rehearsalLoading ? "生成中..." : "生成 dry-run intent"}
-          </button>
-          {rehearsal.chineseMessage && (
-            <div className="text-xs text-gray-500 mt-2">{rehearsal.chineseMessage}</div>
-          )}
-        </div>
-      )}
     </div>
   );
 }

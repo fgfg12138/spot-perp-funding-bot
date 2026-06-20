@@ -201,160 +201,18 @@ export default function MainnetTinyPage() {
         )}
       </section>
 
-      {/* 下单前执行门禁 */}
-      <section className="bg-gray-900 rounded-lg border border-gray-800 p-4 mb-4">
-        <h3 className="text-lg font-semibold mb-3 text-purple-400">下单前执行门禁</h3>
-        <div className="text-sm space-y-2">
-          <div className="flex justify-between"><span className="text-gray-400">safeExecution 状态</span><span className="font-mono">{execDecision?.state ?? "—"}</span></div>
-          <div className="flex justify-between"><span className="text-gray-400">autoTransferExecutable</span><span className={execDecision?.autoTransferExecutable ? "text-green-400" : "text-gray-500"}>{execDecision?.autoTransferExecutable ? "✅" : "❌"}</span></div>
-          <div className="flex justify-between"><span className="text-gray-400">allowRealOrders</span><span className="text-red-400 font-bold">false（强制）</span></div>
-          <div className="flex justify-between"><span className="text-gray-400">HTX / OKX</span><span className="text-red-400">阻断</span></div>
-        </div>
-        <div className="flex gap-2 mt-3">
-          <button onClick={async () => {
-            setOrderPlanLoading(true);
-            try {
-              const eligible = (intents ?? [])
-                .filter((i: any) => i.purpose === "real_arbitrage" && i.simulationOnly !== true && i.simulationOnly !== 1 && i.simulationOnly !== "1" && i.realTradeEligible === true)
-                .sort((a: any, b: any) => Number(b.createdAtUtc ?? b.created_at ?? b.ts ?? 0) - Number(a.createdAtUtc ?? a.created_at ?? a.ts ?? 0));
-              const intent = eligible[0];
-              if (!intent) {
-                alert("暂无合格正式套利机会。rehearsal / simulation intent 不允许生成真实下单计划。");
-                setOrderPlanLoading(false);
-                return;
-              }
-              const r = await fetch("/api/v121/mainnet-tiny/order-plan", {
-                method: "POST", headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  intentId: intent.intentId ?? intent.id,
-                  exchange: "binance",
-                  symbol: intent.symbol,
-                  plannedNotionalUsdt: Number(settings?.notional?.plannedNotionalUsdt ?? 10),
-                }),
-              });
-              const d = await r.json();
-              setOrderPlanResult(d);
-              fetch("/api/v121/mainnet-tiny/order-plan").then(r2 => r2.json()).then(d2 => setOrderPlans(d2.records ?? [])).catch(() => {});
-            } finally { setOrderPlanLoading(false); }
-          }} disabled={orderPlanLoading || !(intents ?? []).some((i: any) => i.purpose === "real_arbitrage" && i.simulationOnly !== true && i.simulationOnly !== 1 && i.simulationOnly !== "1" && i.realTradeEligible === true)} className="border border-purple-500/60 bg-purple-500/15 text-purple-200 px-3 py-1.5 text-sm rounded disabled:opacity-30">
-            {orderPlanLoading ? "生成中..." : "生成下单计划"}
-          </button>
-          <button onClick={async () => {
-            const latestPlan = orderPlans[0];
-            if (!latestPlan || latestPlan.status !== "validated") {
-              alert("只有 validated orderPlan 才能做 Spot test order 校验。");
-              return;
-            }
-            const r = await fetch("/api/v121/mainnet-tiny/order-plan/test", {
-              method: "POST", headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ orderPlanId: latestPlan.id }),
-            });
-            const d = await r.json();
-            alert(d.ok ? `校验通过 (${d.warnings?.join(", ") ?? "无警告"})` : `校验失败: ${(d.blockers ?? [d.error ?? "unknown"]).join(", ")}`);
-          }} disabled={!(() => { const p = orderPlans[0]; return p?.status === "validated" && p?.spotLeg && p?.perpLeg; })()} className="border border-cyan-500/60 bg-cyan-500/15 text-cyan-200 px-3 py-1.5 text-sm rounded disabled:opacity-30">Spot test order 校验</button>
-        </div>
-
-        {orderPlanResult && (
-          <div className="mt-3 p-2 bg-gray-800 rounded text-xs font-mono space-y-1">
-            <div className={orderPlanResult.ok ? "text-green-400" : "text-red-400"}>{orderPlanResult.ok ? "✅ validated" : `⛔ ${orderPlanResult.status}`}</div>
-            {orderPlanResult.orderPlan && (
-              <>
-                <div className="text-gray-400">Spot: {orderPlanResult.orderPlan.spotLeg.quantity.toFixed(6)} @ ${orderPlanResult.orderPlan.spotLeg.estimatedPrice.toFixed(2)} = ${orderPlanResult.orderPlan.spotLeg.quoteNotionalUsdt.toFixed(2)}</div>
-                <div className="text-gray-400">Perp: {orderPlanResult.orderPlan.perpLeg.quantity.toFixed(6)} @ ${orderPlanResult.orderPlan.perpLeg.estimatedPrice.toFixed(2)} = ${orderPlanResult.orderPlan.perpLeg.quoteNotionalUsdt.toFixed(2)}</div>
-                <div className="text-gray-500">clientOrderId: spot={orderPlanResult.orderPlan.spotLeg.clientOrderId} / perp={orderPlanResult.orderPlan.perpLeg.clientOrderId}</div>
-                <div className="text-red-400 font-bold">allowedForActualOrder: false</div>
-              </>
-            )}
-            {orderPlanResult.blockers?.length > 0 && <div className="text-red-400">blockers: {orderPlanResult.blockers.join(", ")}</div>}
-          </div>
-        )}
-
-        {orderPlans.length > 0 && (
-          <div className="mt-3 border-t border-gray-700 pt-2">
-            <div className="text-xs text-gray-500 mb-1">最近订单计划 ({orderPlans.length}):</div>
-            {orderPlans.slice(0, 3).map((p: any) => (
-              <div key={p.id} className="text-xs text-gray-500 flex justify-between">
-                <span>{p.symbol} {p.status}</span>
-                <span className={p.allowedForActualOrder === false ? "text-red-400" : "text-green-400"}>{p.allowedForActualOrder !== false ? "⚠️" : "✅ locked"}</span>
-              </div>
-            ))}
-          </div>
-        )}
-        <p className="text-xs text-gray-600 mt-3 border-t border-gray-800 pt-2">
-          当前只生成下单计划，不会真实下单。即使校验通过，allowedForActualOrder 仍然是 false。
+      {/* 执行入口 — 跳转到执行中心 */}
+      <section className="bg-gray-900 rounded-lg border border-gray-800 p-4">
+        <h3 className="text-lg font-semibold mb-3 text-purple-400">执行中心</h3>
+        <p className="text-sm text-gray-500 mb-3">
+          OrderPlan 生成、Spot test 校验、Dry-run 执行、真实执行全部在统一执行中心操作。
         </p>
-      </section>
-
-      {/* 真实双腿下单执行器 */}
-      <section className="bg-gray-900 rounded-lg border border-gray-800 p-4 mb-4">
-        <h3 className="text-lg font-semibold mb-3 text-red-400">真实双腿下单执行器</h3>
-        <div className="text-sm space-y-2">
-          {orderPlans[0] && (
-            <>
-              <div className="flex justify-between"><span className="text-gray-400">orderPlan</span><span className="font-mono text-xs">{orderPlans[0].id?.slice(0, 20)}...</span></div>
-              <div className="flex justify-between"><span className="text-gray-400">status</span><span className={orderPlans[0].status === "validated" ? "text-green-400" : "text-red-400"}>{orderPlans[0].status}</span></div>
-              <div className="flex justify-between"><span className="text-gray-400">spot clientOrderId</span><span className="font-mono text-xs">{orderPlans[0].spotLeg?.clientOrderId ?? "—"}</span></div>
-              <div className="flex justify-between"><span className="text-gray-400">perp clientOrderId</span><span className="font-mono text-xs">{orderPlans[0].perpLeg?.clientOrderId ?? "—"}</span></div>
-              <div className="flex justify-between"><span className="text-gray-400">plannedNotional</span><span className="font-mono">${orderPlans[0].plannedNotionalUsdt?.toFixed(2)}</span></div>
-              <div className="flex justify-between"><span className="text-gray-400">allowedForActualOrder</span><span className="text-red-400 font-bold">false</span></div>
-            </>
-          )}
-        </div>
-        <div className="flex gap-2 mt-3">
-          <button onClick={async () => {
-            if (!orderPlans[0]) return;
-            setExecLoading(true);
-            const r = await fetch("/api/v121/mainnet-tiny/order-execution", {
-              method: "POST", headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ orderPlanId: orderPlans[0].id, dryRun: true }),
-            });
-            const d = await r.json();
-            setExecResult(d);
-            fetch("/api/v121/mainnet-tiny/order-execution").then(r2 => r2.json()).then(d2 => setOrderExecutions(d2.records ?? [])).catch(() => {});
-            setExecLoading(false);
-          }} disabled={execLoading || !(() => { const p = orderPlans[0]; return p?.status === "validated" && p?.spotLeg && p?.perpLeg; })()} className="border border-yellow-500/60 bg-yellow-500/15 text-yellow-200 px-3 py-1.5 text-sm rounded disabled:opacity-30">Dry-run 执行双腿下单</button>
-          <button onClick={async () => {
-            if (!orderPlans[0]) return;
-            const phrase = window.prompt("输入 EXECUTE_REAL_TWO_LEG_ORDER 确认真实双腿下单。该操作会真实买入现货并开空永续。");
-            if (phrase !== "EXECUTE_REAL_TWO_LEG_ORDER") return;
-            setExecLoading(true);
-            const r = await fetch("/api/v121/mainnet-tiny/order-execution", {
-              method: "POST", headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ orderPlanId: orderPlans[0].id, dryRun: false, explicitConfirm: "EXECUTE_REAL_TWO_LEG_ORDER" }),
-            });
-            const d = await r.json();
-            setExecResult(d);
-            fetch("/api/v121/mainnet-tiny/order-execution").then(r2 => r2.json()).then(d2 => setOrderExecutions(d2.records ?? [])).catch(() => {});
-            setExecLoading(false);
-          }} disabled={execLoading || !orderPlans[0] || orderPlans[0].status !== "validated"} className="border border-red-500/60 bg-red-500/15 text-red-200 px-3 py-1.5 text-sm rounded disabled:opacity-30">真实执行双腿下单</button>
-        </div>
-
-        {execResult && (
-          <div className="mt-3 p-2 bg-gray-800 rounded text-xs font-mono space-y-1">
-            <div className={execResult.status === "dry_run" || execResult.status === "filled" ? "text-green-400" : "text-red-400"}>
-              {execResult.status} {execResult.frozenReason ? `(frozen: ${execResult.frozenReason})` : ""}
-            </div>
-            {execResult.blockers?.length > 0 && <div className="text-red-400">blockers: {execResult.blockers.join(", ")}</div>}
-            {execResult.spot && <div className="text-gray-400">Spot: {execResult.spot.status} (id: {execResult.spot.exchangeOrderId ?? "—"})</div>}
-            {execResult.perp && <div className="text-gray-400">Perp: {execResult.perp.status} (id: {execResult.perp.exchangeOrderId ?? "—"})</div>}
-          </div>
-        )}
-
-        {orderExecutions.length > 0 && (
-          <div className="mt-3 border-t border-gray-700 pt-2">
-            <div className="text-xs text-gray-500 mb-1">最近执行 ({orderExecutions.length}):</div>
-            {orderExecutions.slice(0, 3).map((e: any) => (
-              <div key={e.id} className="text-xs text-gray-500 flex justify-between">
-                <span>{e.status}{e.frozenReason ? ` (${e.frozenReason})` : ""}</span>
-                <span>{new Date(e.createdAtUtc).toLocaleTimeString()}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <p className="text-xs text-red-400/70 mt-3 border-t border-gray-800 pt-2 leading-relaxed">
-          ⚠️ 真实执行会真实下单。任何一腿失败、未知、部分成交，系统会冻结，不会自动补腿或平仓。
-        </p>
+        <a
+          href="/v121/execution"
+          className="inline-block border border-cyan-500/60 bg-cyan-500/15 text-cyan-200 px-4 py-2 text-sm rounded hover:bg-cyan-500/25"
+        >
+          去执行中心处理 orderPlan →
+        </a>
       </section>
     </div>
   );
