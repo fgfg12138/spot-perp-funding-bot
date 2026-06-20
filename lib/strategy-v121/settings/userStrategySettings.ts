@@ -55,7 +55,7 @@ export const DEFAULT_USER_STRATEGY_SETTINGS: UserStrategySettings = {
   notional: { plannedNotionalUsdt: 10, maxOrderNotionalUsdt: 50, maxSymbolExposureUsdt: 50, maxExchangeExposureUsdt: 100, allowAutoDownsize: true },
   capital: { globalReserveRate: 0.2, minGlobalReserveUsdt: 10, spotBufferRate: 0.015, perpBufferRate: 0.035 },
   transfer: { allowAutoTransfer: false, mode: "disabled", maxAutoTransferUsdt: 50, allowSpotToPerp: true, allowPerpToSpot: true, requireReauditAfterTransfer: true },
-  universe: { useDynamicUniverse: true, maxDynamicSymbolsPerExchange: 80, minSpotVolume24hUsdt: 0, minPerpVolume24hUsdt: 0, allowSmallCaps: false, symbolWhitelist: [], symbolBlacklist: [], prioritySymbols: ["BTC/USDT","ETH/USDT","SOL/USDT","XRP/USDT","DOGE/USDT","BNB/USDT","ADA/USDT","AVAX/USDT","LINK/USDT","SUI/USDT"] },
+  universe: { useDynamicUniverse: true, maxDynamicSymbolsPerExchange: 80, minSpotVolume24hUsdt: 1_000_000, minPerpVolume24hUsdt: 5_000_000, allowSmallCaps: false, symbolWhitelist: [], symbolBlacklist: [], prioritySymbols: ["BTC/USDT","ETH/USDT","SOL/USDT","XRP/USDT","DOGE/USDT","BNB/USDT","ADA/USDT","AVAX/USDT","LINK/USDT","SUI/USDT"] },
   execution: { requireHumanApproval: true, allowRealOrders: false, maxLegDeviationRate: 0.01, orderTimeoutMs: 15000, freezeOnUnknownOrder: true, freezeOnUnknownTransfer: true },
 };
 
@@ -119,6 +119,8 @@ export function validateSettings(s: UserStrategySettings): string[] {
   if (s.capital.spotBufferRate < 0 || s.capital.spotBufferRate > 0.2) errors.push("spotBufferRate 必须在 0-0.2 之间");
   if (s.capital.perpBufferRate < 0 || s.capital.perpBufferRate > 0.5) errors.push("perpBufferRate 必须在 0-0.5 之间");
   if (s.transfer.maxAutoTransferUsdt < 0) errors.push("maxAutoTransferUsdt 不能小于 0");
+  if (s.universe.minSpotVolume24hUsdt < 0) errors.push("minSpotVolume24hUsdt 不能小于 0");
+  if (s.universe.minPerpVolume24hUsdt < 0) errors.push("minPerpVolume24hUsdt 不能小于 0");
   if (s.universe.maxDynamicSymbolsPerExchange < 1 || s.universe.maxDynamicSymbolsPerExchange > 300) errors.push("maxDynamicSymbolsPerExchange 必须在 1-300 之间");
   if (!s.transfer.requireReauditAfterTransfer) errors.push("requireReauditAfterTransfer 必须为 true");
   if (!s.execution.requireHumanApproval) errors.push("requireHumanApproval 必须为 true");

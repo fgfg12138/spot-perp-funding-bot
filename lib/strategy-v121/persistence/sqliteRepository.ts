@@ -55,6 +55,11 @@ export class SqliteRepository {
         "realOrderExecutionEnabled INTEGER DEFAULT 0",
         "dataSource TEXT DEFAULT 'order_intent'",
       ],
+      user_strategy_settings: [
+        "json TEXT",
+        "created_at_utc INTEGER",
+        "updated_at_utc INTEGER",
+      ],
     };
     for (const [table, columns] of Object.entries(patches)) {
       for (const col of columns) {

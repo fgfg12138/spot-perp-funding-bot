@@ -12,10 +12,21 @@ export async function loadSettings(): Promise<UserStrategySettings> {
   const repo = getRepository();
   const rows = repo.queryAll("user_strategy_settings") as any[];
   const row = rows.find((r: any) => r.id === SETTINGS_KEY);
-  if (!row || !row.json) return { ...DEFAULT_USER_STRATEGY_SETTINGS };
+
+  const raw =
+    row?.json ??
+    row?.settings_json ??
+    row?.settingsJson ??
+    row?.value ??
+    row?.data;
+
+  if (!raw) return { ...DEFAULT_USER_STRATEGY_SETTINGS };
+
   try {
-    const parsed = JSON.parse(String(row.json));
-    return normalizeSettings(parsed);
+    if (typeof raw === "object") {
+      return normalizeSettings(raw);
+    }
+    return normalizeSettings(JSON.parse(String(raw)));
   } catch {
     return { ...DEFAULT_USER_STRATEGY_SETTINGS };
   }
@@ -28,13 +39,19 @@ export async function saveSettingsPatch(patch: unknown): Promise<{
   const current = await loadSettings();
   const merged = normalizeSettings(mergeDeep(current, patch));
   const warnings = validateSettings(merged);
+  const now = Date.now();
   const repo = getRepository();
+
+  const existing = repo.queryAll("user_strategy_settings") as any[];
+  const row = existing.find((r: any) => r.id === SETTINGS_KEY);
+
   repo.save("user_strategy_settings", {
     id: SETTINGS_KEY,
     json: JSON.stringify(merged),
-    created_at_utc: Date.now(),
-    updated_at_utc: Date.now(),
+    created_at_utc: row?.created_at_utc ?? now,
+    updated_at_utc: now,
   } as any);
+
   return { settings: merged, warnings };
 }
 
