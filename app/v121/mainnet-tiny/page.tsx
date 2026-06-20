@@ -214,15 +214,29 @@ export default function MainnetTinyPage() {
           <button onClick={async () => {
             setOrderPlanLoading(true);
             try {
+              const eligible = (intents ?? [])
+                .filter((i: any) => i.purpose === "real_arbitrage" && i.simulationOnly !== true && i.simulationOnly !== 1 && i.simulationOnly !== "1" && i.realTradeEligible === true)
+                .sort((a: any, b: any) => Number(b.createdAtUtc ?? b.created_at ?? b.ts ?? 0) - Number(a.createdAtUtc ?? a.created_at ?? a.ts ?? 0));
+              const intent = eligible[0];
+              if (!intent) {
+                alert("暂无合格正式套利机会。rehearsal / simulation intent 不允许生成真实下单计划。");
+                setOrderPlanLoading(false);
+                return;
+              }
               const r = await fetch("/api/v121/mainnet-tiny/order-plan", {
                 method: "POST", headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ intentId: intents[0]?.id, exchange: "binance", symbol: intents[0]?.symbol ?? "BTC/USDT", plannedNotionalUsdt: 10 }),
+                body: JSON.stringify({
+                  intentId: intent.intentId ?? intent.id,
+                  exchange: "binance",
+                  symbol: intent.symbol,
+                  plannedNotionalUsdt: Number(settings?.notional?.plannedNotionalUsdt ?? 10),
+                }),
               });
               const d = await r.json();
               setOrderPlanResult(d);
               fetch("/api/v121/mainnet-tiny/order-plan").then(r2 => r2.json()).then(d2 => setOrderPlans(d2.records ?? [])).catch(() => {});
             } finally { setOrderPlanLoading(false); }
-          }} disabled={orderPlanLoading} className="border border-purple-500/60 bg-purple-500/15 text-purple-200 px-3 py-1.5 text-sm rounded disabled:opacity-30">
+          }} disabled={orderPlanLoading || !(intents ?? []).some((i: any) => i.purpose === "real_arbitrage" && i.simulationOnly !== true && i.simulationOnly !== 1 && i.simulationOnly !== "1" && i.realTradeEligible === true)} className="border border-purple-500/60 bg-purple-500/15 text-purple-200 px-3 py-1.5 text-sm rounded disabled:opacity-30">
             {orderPlanLoading ? "生成中..." : "生成下单计划"}
           </button>
           <button onClick={async () => {
