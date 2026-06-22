@@ -1,8 +1,15 @@
 /**
- * Strategy Template Tests — Recovery R2
+ * Strategy Template Tests — Recovery R2 (updated for V121 product surface)
+ *
+ * The V1.0 /strategies page + StrategyManager.tsx were removed during V121
+ * productization (the product surface is /trade/open, /trade/close, /positions
+ * under app/(app)/layout.tsx). The underlying strategy template lib
+ * (lib/strategies/types.ts, strategyStore.ts) is retained for the strategy
+ * config layer. This file now asserts: (a) the lib template types/clone
+ * function still exist, (b) the V1.0 UI files are gone.
  */
 
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { cloneStrategy } from "@/lib/strategies/strategyStore";
@@ -72,70 +79,14 @@ describe("Strategy Store — cloneStrategy", () => {
   });
 });
 
-// ─── UI Contains Template Elements ─────────────────────
+// ─── V1.0 Strategy UI Removed ───────────────────────────
 
-describe("StrategyManager UI — Template Elements", () => {
-  const ui = read("app/strategies/StrategyManager.tsx");
-
-  it("contains Template Only message", () => {
-    expect(ui).toContain("Template Only");
-    expect(ui).toContain("Will Not Place Real Orders");
+describe("V1.0 Strategy UI — 已移除", () => {
+  it("app/strategies/StrategyManager.tsx has been removed (V1.0 residue)", () => {
+    expect(existsSync(join(root, "app/strategies/StrategyManager.tsx"))).toBe(false);
   });
 
-  it("contains template category selector", () => {
-    expect(ui).toContain("模板分类");
-    expect(ui).toContain("funding-arbitrage");
-    expect(ui).toContain("basis-trade");
-    expect(ui).toContain("cross-exchange");
-    expect(ui).toContain("custom");
+  it("app/strategies/page.tsx has been removed (V1.0 residue)", () => {
+    expect(existsSync(join(root, "app/strategies/page.tsx"))).toBe(false);
   });
-
-  it("contains Template badge", () => {
-    expect(ui).toContain("🧩 Template");
-  });
-
-  it("contains Clone button icon", () => {
-    expect(ui).toContain("Copy");
-  });
-
-  it("contains clone strategy function", () => {
-    expect(ui).toContain("cloneStrategyAction");
-  });
-
-  it("contains template field inputs", () => {
-    expect(ui).toContain("maxPositionUsd");
-    expect(ui).toContain("stopLossPercent");
-    expect(ui).toContain("takeProfitPercent");
-    expect(ui).toContain("minNetRate");
-  });
-});
-
-// ─── Page Metadata ─────────────────────────────────────
-
-describe("Strategies Page — Metadata", () => {
-  const page = read("app/strategies/page.tsx");
-
-  it("contains Will Not Place Real Orders", () => {
-    expect(page).toContain("Will Not Place Real Orders");
-  });
-
-  it("contains Template Only", () => {
-    expect(page).toContain("Template Only");
-  });
-});
-
-// ─── Safety Boundaries ─────────────────────────────────
-
-describe("Strategy Template — Safety Boundaries", () => {
-  const files = ["app/strategies/StrategyManager.tsx", "app/strategies/page.tsx"];
-
-  for (const f of files) {
-    const content = read(f);
-    it(`${f} does not contain fetch to exchange`, () => {
-      const imports = content.split("\n").filter((l) => l.includes("import ") && l.includes("from"));
-      for (const line of imports) {
-        expect(line).not.toMatch(/@binance|binance-api|okx-api|bybit-api|ccxt/i);
-      }
-    });
-  }
 });

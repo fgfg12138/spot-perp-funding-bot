@@ -11,7 +11,7 @@
  * - Review doc declares all boundaries
  */
 
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { buildReadinessSummary } from "@/lib/liveAdapters/testnetReadinessSummary";
@@ -25,23 +25,10 @@ function read(relativePath: string) {
 // ─── Readiness Dashboard Warning ─────────────────────────
 
 describe("Phase 5.27 — Readiness Dashboard Warning", () => {
-  const page = read("app/testnet-readiness/page.tsx");
-
-  it("contains 'Does NOT enable Testnet'", () => {
-    expect(page).toContain("Does NOT enable Testnet");
-  });
-
-  it("contains 'Does NOT retrieve Secrets'", () => {
-    expect(page).toContain("Does NOT retrieve Secrets");
-  });
-
-  it("contains 'Does NOT place orders'", () => {
-    expect(page).toContain("Does NOT place orders");
-  });
-
-  it("displays 'NOT READY' in the status", () => {
-    const pageLower = page.replace(/<[^>]+>/g, " ").toLowerCase();
-    expect(pageLower).toContain("not ready");
+  // The V1.0 app/testnet-readiness page was removed during V121 productization.
+  // The readiness state is still enforced by buildReadinessSummary() below.
+  it("app/testnet-readiness page has been removed (V1.0 residue)", () => {
+    expect(existsSync(join(root, "app/testnet-readiness/page.tsx"))).toBe(false);
   });
 });
 
