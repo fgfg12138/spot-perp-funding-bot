@@ -45,10 +45,36 @@ describe("Old V1.0 pages — 已移除", () => {
     "app/risk-rules/page.tsx",
     "app/api-keys/page.tsx",
     "app/api/strategies/[id]/clone/route.ts",
+    "app/risk-center/page.tsx",
+    "components/PageShell.tsx",
+    "components/TopNav.tsx",
+    "components/LoadingSkeleton.tsx",
+    "components/ui/dashboard.tsx",
   ];
   for (const p of REMOVED) {
     it(`${p} does NOT exist`, () => { expect(exists(p)).toBe(false); });
   }
+});
+
+// ─── Product Navigation — 仅 8 项 ─────────────────────────
+
+describe("Product navigation — 普通 8 项 + 开发者门禁", () => {
+  const layout = read("app/(app)/layout.tsx");
+
+  it("PRODUCT_NAV has exactly 8 entries", () => {
+    const labels = (layout.match(/label: "[^"]+"/g) || []).filter((l) =>
+      /总览|机会|开仓|持仓|平仓|风控|设置|复盘/.test(l)
+    );
+    expect(labels).toHaveLength(8);
+  });
+
+  it("PRODUCT_NAV does not include /risk-center", () => {
+    expect(layout).not.toContain("/risk-center");
+  });
+
+  it("DEV_NAV gated by V121_ENABLE_DEV_TOOLS", () => {
+    expect(layout).toContain("V121_ENABLE_DEV_TOOLS");
+  });
 });
 
 // ─── Safety Boundaries (preserved) ───────────────────────
