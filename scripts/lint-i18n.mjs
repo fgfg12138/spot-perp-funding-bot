@@ -55,7 +55,16 @@ const V121_ENGINEERING_TERMS = [
   "PAPER",
 ];
 
-const FORBIDDEN_TERMS = [...LEGACY_FORBIDDEN, ...V121_ENGINEERING_TERMS];
+// 中文产品禁词 —— 成品页面里不可出现"测试/模拟/演练"类描述，
+// 否则用户会以为这是测试平台。后端可以 dry-run，但前端不应说"模拟"。
+const PRODUCT_CN_FORBIDDEN = [
+  "模拟一次下单",
+  "模拟下单",
+  "演练",
+  "测试下单",
+];
+
+const FORBIDDEN_TERMS = [...LEGACY_FORBIDDEN, ...V121_ENGINEERING_TERMS, ...PRODUCT_CN_FORBIDDEN];
 const INTERNAL_VALUES = new Set(["CrossExchange", "SpotPerp"]);
 
 const findings = [];

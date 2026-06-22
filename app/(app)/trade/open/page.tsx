@@ -91,9 +91,13 @@ export default function TradeOpenPage() {
   const [transferLoading, setTransferLoading] = useState(false);
   const [transferSkipped, setTransferSkipped] = useState(false);
 
+  // 真实开仓门控状态（来自 /api/v121/mainnet-tiny/gate，仅用于前端按钮展示）
+  const [gate, setGate] = useState<any>(null);
+
   const fetchAll = () => {
     fetch("/api/v121/mainnet-tiny/intents").then((r) => r.json()).then((d) => setIntents(d.intents ?? [])).catch(() => {});
     fetch("/api/v121/settings").then((r) => r.json()).then((d) => setSettings(d.settings ?? d)).catch(() => {});
+    fetch("/api/v121/mainnet-tiny/gate").then((r) => r.json()).then(setGate).catch(() => {});
   };
 
   useEffect(() => {
@@ -124,6 +128,11 @@ export default function TradeOpenPage() {
 
   // ⑥ 真实开仓
   const realOpenDone = realExecResult?.status === "filled";
+
+  // 真实开仓是否已开启：需要 MAINNET_TINY 配置门满足 + 真实下单硬门控 env 为 "1"。
+  // 这是前端展示用判断；后端 guardedOrderExecutor 仍会独立强制，此处不影响安全。
+  const realOpenEnabled =
+    gate?.allowed === true && gate?.realOrderExecutionEnabled === true;
 
   // 各步是否就绪
   const step1Done = selectedIntent != null;
@@ -421,7 +430,7 @@ export default function TradeOpenPage() {
         disabled={!step4Done}
       >
         <p className="mb-3 text-xs text-gray-500">
-          系统将模拟一次下单，校验所有安全检查是否通过。通过后才能进入确认开仓。
+          此步骤用于确认当前开仓条件仍然有效，不会改变账户持仓。通过后才能进入确认开仓。
         </p>
         <div className="mb-3">
           <button
@@ -454,13 +463,19 @@ export default function TradeOpenPage() {
         done={realOpenDone}
         disabled={!step5Done}
       >
-        <p className="mb-3 text-xs text-gray-500">
-          点击后将弹出确认框，需要输入 <code className="rounded bg-gray-800 px-1 text-cyan-300">{USER_CONFIRM_OPEN}</code> 才会真实下单。
-        </p>
+        {realOpenEnabled ? (
+          <p className="mb-3 text-xs text-gray-500">
+            点击后将弹出确认框，需要输入 <code className="rounded bg-gray-800 px-1 text-cyan-300">{USER_CONFIRM_OPEN}</code> 才会真实下单。
+          </p>
+        ) : (
+          <p className="mb-3 text-xs text-gray-500">
+            真实开仓当前未开启。系统会继续监控机会，开启真实开仓需要管理员完成安全配置。
+          </p>
+        )}
         <div className="mb-3">
           <button
             onClick={runRealOpen}
-            disabled={!step5Done || realExecLoading || realOpenDone}
+            disabled={!step5Done || !realOpenEnabled || realExecLoading || realOpenDone}
             className="border border-red-500/60 bg-red-500/15 px-4 py-2 text-sm font-semibold text-red-200 rounded disabled:opacity-30"
           >
             {realExecLoading ? "下单中..." : realOpenDone ? "已开仓" : "确认开仓"}

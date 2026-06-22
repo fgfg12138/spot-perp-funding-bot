@@ -3,6 +3,7 @@ import { paperStore } from "@/lib/strategy-v121/execution/paperStore";
 import { BinancePublicAdapter } from "@/lib/strategy-v121/market/adapters/binancePublicAdapter";
 import { calcExitExecutableBasis } from "@/lib/strategy-v121/market/basis";
 import { shouldExitPosition, type ExitCheckInput } from "@/lib/strategy-v121/position/exitRules";
+import { isSmallCoin } from "@/lib/strategy-v121/market/contractSpec";
 import { getRepository } from "@/lib/strategy-v121/persistence/repositoryFactory";
 import { loadSettings } from "@/lib/strategy-v121/settings/userStrategySettingsStore";
 
@@ -136,12 +137,13 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       settings = null;
     }
     const minNetProfitRate = Number(settings?.funding?.minNetProfitRate ?? 0) || 0;
-    // 注意：此处用原始 path 值判断，因为上方 binance 守卫已把 perpEx 收窄为 "binance"，
-    // 直接比较 perpEx === "htx" 会被 TS 视为不可能比较。币安路径本身不是 HTX，
-    // 是否按小币处理取决于 allowSmallCaps。
+    // isHtxOrSmallCoin 决定最大持仓时长（exitRules: HTX/小币 24h，其余 72h）。
+    // 用路径 + 标的的准确判断，不要用 allowSmallCaps 开关当代理——
+    // 否则用户一旦开启 allowSmallCaps，所有持仓（含 BTC）都会被当成小币强制 24h 退出。
+    // isSmallCoin 是纯函数（识别 1000x 乘数小币合约），服务器端调用安全。
     const isHtxOrSmallCoin =
       String(position.path.perpExchange ?? "").toLowerCase() === "htx" ||
-      Boolean(settings?.universe?.allowSmallCaps);
+      isSmallCoin(String(position.path.symbol ?? ""));
     const targetNetProfit = Math.max(
       minNetProfitRate * notional,
       entryBasis * notional * 0.85,
