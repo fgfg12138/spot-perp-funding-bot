@@ -146,6 +146,50 @@ export const EXTRA_TABLES: Record<string, string> = {
     CREATE INDEX IF NOT EXISTS idx_order_execution_ledger_order_plan_id ON order_execution_ledger(order_plan_id);
     CREATE INDEX IF NOT EXISTS idx_order_execution_ledger_status ON order_execution_ledger(status);
   `,
+  CLOSE_PLAN_LEDGER: `
+    CREATE TABLE IF NOT EXISTS close_plan_ledger (
+      id TEXT PRIMARY KEY,
+      position_id TEXT NOT NULL,
+      exchange TEXT NOT NULL,
+      symbol TEXT NOT NULL,
+      spot_close_qty REAL NOT NULL DEFAULT 0,
+      perp_close_qty REAL NOT NULL DEFAULT 0,
+      status TEXT NOT NULL,
+      blockers_json TEXT DEFAULT '[]',
+      warnings_json TEXT DEFAULT '[]',
+      real_close_enabled INTEGER DEFAULT 0,
+      raw_json TEXT NOT NULL,
+      created_at_utc TEXT NOT NULL,
+      expires_at_utc TEXT NOT NULL,
+      updated_at_utc TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_close_plan_ledger_position_id ON close_plan_ledger(position_id);
+    CREATE INDEX IF NOT EXISTS idx_close_plan_ledger_status ON close_plan_ledger(status);
+  `,
+  CLOSE_EXECUTION_LEDGER: `
+    CREATE TABLE IF NOT EXISTS close_execution_ledger (
+      id TEXT PRIMARY KEY,
+      position_id TEXT NOT NULL,
+      close_plan_id TEXT NOT NULL,
+      exchange TEXT NOT NULL,
+      symbol TEXT NOT NULL,
+      status TEXT NOT NULL,
+      perp_client_order_id TEXT,
+      perp_exchange_order_id TEXT,
+      perp_status TEXT,
+      spot_client_order_id TEXT,
+      spot_exchange_order_id TEXT,
+      spot_status TEXT,
+      frozen_reason TEXT,
+      final_pnl_json TEXT,
+      verification_json TEXT,
+      raw_json TEXT NOT NULL,
+      created_at_utc TEXT NOT NULL,
+      updated_at_utc TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_close_execution_ledger_position_id ON close_execution_ledger(position_id);
+    CREATE INDEX IF NOT EXISTS idx_close_execution_ledger_status ON close_execution_ledger(status);
+  `,
 };
 
 export function getExtraCreateSQL(): string[] {
@@ -158,5 +202,6 @@ export const ALL_TABLE_NAMES = [
   "paper_executions", "latest_scan", "order_intents",
   "blocked_execution_attempts", "worker_heartbeat",
   "user_strategy_settings", "internal_transfer_ledger",
-  "order_plan_ledger",
+  "order_plan_ledger", "order_execution_ledger",
+  "close_plan_ledger", "close_execution_ledger",
 ];
