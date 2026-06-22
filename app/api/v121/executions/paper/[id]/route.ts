@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isDevToolsEnabled, devToolsForbiddenResponse } from "@/lib/strategy-v121/runtime/devToolsGate";
 import {
   executeBatch, exitPosition, closePosition,
   reviewPosition, freezeExecution,
@@ -18,6 +19,7 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  if (!isDevToolsEnabled()) return devToolsForbiddenResponse();
   const { id } = await params;
   const ex = paperStore.findById(id);
   if (!ex) {
@@ -44,6 +46,7 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  if (!isDevToolsEnabled()) return devToolsForbiddenResponse();
   const { id } = await params;
   const ex = paperStore.findById(id);
   if (!ex) {

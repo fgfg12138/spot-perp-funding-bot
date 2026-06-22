@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
+import { isDevToolsEnabled, devToolsForbiddenResponse } from "@/lib/strategy-v121/runtime/devToolsGate";
 import { createOrderIntent } from "@/lib/strategy-v121/execution/orderIntent";
 import { getActiveAlerts } from "@/lib/strategy-v121/opportunity/opportunityWatcher";
 
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  if (!isDevToolsEnabled()) return devToolsForbiddenResponse();
   const { id } = await params;
   const alerts = getActiveAlerts();
   const alert = alerts.find(a => a.id === id);

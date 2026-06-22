@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
+import { isDevToolsEnabled, devToolsForbiddenResponse } from "@/lib/strategy-v121/runtime/devToolsGate";
 import { checkOrderConstraint } from "@/lib/strategy-v121/execution/orderConstraintPrecheck";
 
 export async function GET(request: Request) {
+  if (!isDevToolsEnabled()) return devToolsForbiddenResponse();
   const { searchParams } = new URL(request.url);
   const symbol = searchParams.get("symbol") ?? "BTC/USDT";
   const exchange = (searchParams.get("exchange") ?? "binance") as any;

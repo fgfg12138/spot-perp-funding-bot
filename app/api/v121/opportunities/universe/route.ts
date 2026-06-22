@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
+import { isDevToolsEnabled, devToolsForbiddenResponse } from "@/lib/strategy-v121/runtime/devToolsGate";
 import {
   discoverSameExchangeUniverse,
   getUniverseDiscoveryMeta,
 } from "@/lib/strategy-v121/market/universeDiscovery";
 
 export async function GET() {
+  if (!isDevToolsEnabled()) return devToolsForbiddenResponse();
   try {
     const items = await discoverSameExchangeUniverse();
     const meta = getUniverseDiscoveryMeta();

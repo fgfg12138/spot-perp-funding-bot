@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isDevToolsEnabled, devToolsForbiddenResponse } from "@/lib/strategy-v121/runtime/devToolsGate";
 import { checkMainnetTinyGate } from "@/lib/strategy-v121/mainnetTiny/mainnetTinyGate";
 import { runMainnetTinyPreflight } from "@/lib/strategy-v121/mainnetTiny/mainnetTinyPreflight";
 import { getPersistenceMode } from "@/lib/strategy-v121/persistence/persistenceMode";
@@ -6,6 +7,7 @@ import { getRepository } from "@/lib/strategy-v121/persistence/repositoryFactory
 
 /** GET /api/v121/mainnet-tiny/armed-dry-run */
 export async function GET() {
+  if (!isDevToolsEnabled()) return devToolsForbiddenResponse();
   const gate = checkMainnetTinyGate();
   const preflight = runMainnetTinyPreflight();
   const repo = getRepository();

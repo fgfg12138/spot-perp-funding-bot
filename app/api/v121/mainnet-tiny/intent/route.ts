@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
+import { isDevToolsEnabled, devToolsForbiddenResponse } from "@/lib/strategy-v121/runtime/devToolsGate";
 import { createOrderIntent, recordBlockedAttempt } from "@/lib/strategy-v121/execution/orderIntent";
 import { checkMainnetTinyGate } from "@/lib/strategy-v121/mainnetTiny/mainnetTinyGate";
 import type { ExchangeId } from "@/lib/strategy-v121/domain/types";
 
 /** POST /api/v121/mainnet-tiny/intent — 创建执行意图（不下单） */
 export async function POST(request: Request) {
+  if (!isDevToolsEnabled()) return devToolsForbiddenResponse();
   const body = await request.json();
   const { symbol, spotExchange, perpExchange, plannedNotionalUsdt, batchNo } = body;
 

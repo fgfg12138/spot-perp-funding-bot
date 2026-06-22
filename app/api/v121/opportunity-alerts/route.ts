@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
+import { isDevToolsEnabled, devToolsForbiddenResponse } from "@/lib/strategy-v121/runtime/devToolsGate";
 import { checkForAlerts, getActiveAlerts, acknowledgeAlert } from "@/lib/strategy-v121/opportunity/opportunityWatcher";
 
 export async function GET() {
+  if (!isDevToolsEnabled()) return devToolsForbiddenResponse();
   const alerts = getActiveAlerts();
   return NextResponse.json({
     alerts,
@@ -11,6 +13,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  if (!isDevToolsEnabled()) return devToolsForbiddenResponse();
   const body = await request.json();
   if (body.action === "refresh") {
     const newAlerts = checkForAlerts();
