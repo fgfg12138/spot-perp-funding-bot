@@ -22,6 +22,7 @@ const ENDPOINTS = [
   { path: "/api/v121/shadow", name: "Shadow diagnostics" },
   { path: "/api/v121/review", name: "Review" },
   { path: "/api/v121/positions", name: "Positions" },
+  { path: "/api/v121/exchange-accounts", name: "Exchange accounts" },
 ];
 
 async function main() {
