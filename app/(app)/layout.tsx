@@ -25,6 +25,7 @@ const PRODUCT_NAV = [
 const DEV_NAV = [
   { href: "/v121/intents", label: "执行意图" },
   { href: "/v121/shadow", label: "只读诊断" },
+  { href: "/v121/api-keys", label: "交易所账户" },
   { href: "/v121/mainnet-tiny", label: "主网小资金" },
   { href: "/v121/mainnet-tiny/final-audit", label: "实盘前审计" },
 ] as const;

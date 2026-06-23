@@ -14,10 +14,21 @@ import { join, relative } from "node:path";
  * 任何成品页面里出现工程术语（dry-run / OrderPlan / Intent / Ledger / Preflight /
  * Spot test / MAINNET_TINY / SHADOW / PAPER）或旧版英文交易词（Short / Long 等），
  * 都视为泄漏并让 lint 失败。
+ *
+ * 除了成品路由组 app/(app)/**，部分位于 components/ 下的用户可见组件也会被
+ * 成品页面渲染（例如设置页引入的交易所账户管理组件）。这些组件同样在普通用户
+ * 视野内，必须纳入禁词扫描。通过 USER_FACING_COMPONENTS 数组显式列举，避免
+ * 误扫整个 components/**（内部开发组件可能合法包含工程术语）。
  */
 const ROOT = process.cwd();
 const SCAN_DIRS = [join("app", "(app)")];
 const EXTENSIONS = new Set([".js", ".jsx", ".ts", ".tsx", ".mdx"]);
+
+// 位于 components/ 下、但会被成品页面渲染的用户可见组件。
+// 新增用户可见组件时，在此数组追加相对路径即可纳入扫描。
+const USER_FACING_COMPONENTS = [
+  join("components", "v121", "ExchangeAccountsSection.tsx"),
+];
 
 // 旧版禁用词（V1.0 英文交易术语，不可在成品 UI 出现）
 const LEGACY_FORBIDDEN = [
@@ -78,9 +89,19 @@ for (const dir of SCAN_DIRS) {
   walk(absDir);
 }
 
+// 扫描用户可见组件（位于 components/ 下但被成品页面渲染）
+for (const comp of USER_FACING_COMPONENTS) {
+  const absComp = join(ROOT, comp);
+  if (!existsSync(absComp)) {
+    console.error(`i18n lint: user-facing component not found: ${comp}`);
+    process.exit(1);
+  }
+  scanFile(absComp);
+}
+
 if (findings.length > 0) {
   console.error(
-    "i18n lint failed: forbidden English / engineering terms remain in product UI (app/(app)/**).",
+    "i18n lint failed: forbidden English / engineering terms remain in product UI (app/(app)/** + user-facing components).",
   );
   for (const finding of findings) {
     console.error(`${finding.file}:${finding.line}: ${finding.term} -> ${finding.text.trim()}`);
@@ -88,7 +109,7 @@ if (findings.length > 0) {
   process.exit(1);
 }
 
-console.log("i18n lint passed: no forbidden UI terms found in app/(app)/**.");
+console.log("i18n lint passed: no forbidden UI terms found in app/(app)/** + user-facing components.");
 
 function walk(dir) {
   for (const entry of readdirSync(dir)) {

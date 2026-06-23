@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   DEFAULT_USER_STRATEGY_SETTINGS,
   normalizeSettings,
   type UserStrategySettings,
 } from "@/lib/strategy-v121/settings/userStrategySettings";
+import { ExchangeAccountsSection } from "@/components/v121/ExchangeAccountsSection";
 
 /**
  * 设置页 — 用户可调的套利参数。
@@ -30,6 +31,7 @@ export default function SettingsPage() {
   const [s, setS] = useState<UserStrategySettings | null>(null);
   const [ks, setKs] = useState<any>(null);
   const [msg, setMsg] = useState("");
+  const exchangeAccountsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetch("/api/v121/settings")
@@ -46,6 +48,22 @@ export default function SettingsPage() {
       .then(setKs)
       .catch(() => {});
   }, []);
+
+  // 支持 /settings?section=exchange-accounts 直接滚动到交易所账户区块
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const section = new URLSearchParams(window.location.search).get("section");
+    if (section === "exchange-accounts" && exchangeAccountsRef.current) {
+      // 等待账户区块渲染后再滚动
+      const timer = setTimeout(() => {
+        exchangeAccountsRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }, 200);
+      return () => clearTimeout(timer);
+    }
+  }, [s]);
 
   const patch = (path: string, val: any) => {
     setS((prev) => {
@@ -134,6 +152,14 @@ export default function SettingsPage() {
       ) : null}
 
       <div className="grid gap-6">
+        {/* 交易所账户 — 连接与管理 API */}
+        <section
+          ref={exchangeAccountsRef}
+          className="scroll-mt-20 rounded-lg border border-gray-800 bg-gray-900 p-4"
+        >
+          <ExchangeAccountsSection showTitle={true} />
+        </section>
+
         {/* 风险保护开关（原 Kill Switch，功能不变） */}
         <section className="rounded-lg border border-gray-800 bg-gray-900 p-4">
           <h3 className="mb-3 text-lg font-semibold text-red-400">风险保护开关</h3>
