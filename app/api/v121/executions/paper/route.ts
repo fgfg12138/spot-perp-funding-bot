@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isDevToolsEnabled, devToolsForbiddenResponse } from "@/lib/strategy-v121/runtime/devToolsGate";
 import { createPaperExecution, startPrecheck } from "@/lib/strategy-v121/execution/paperLifecycle";
 import { paperStore } from "@/lib/strategy-v121/execution/paperStore";
 import { getKillSwitch, isActionAllowed } from "@/lib/strategy-v121/risk/killSwitch";
@@ -12,6 +13,7 @@ import type { ExchangeId } from "@/lib/strategy-v121/domain/types";
  * Blocked if Kill Switch prevents new entries.
  */
 export async function POST(request: Request) {
+  if (!isDevToolsEnabled()) return devToolsForbiddenResponse();
   try {
     const ks = getKillSwitch();
     if (!isActionAllowed("PAPER", ks)) {
@@ -69,6 +71,7 @@ export async function POST(request: Request) {
  * List all paper executions with summary fields.
  */
 export async function GET() {
+  if (!isDevToolsEnabled()) return devToolsForbiddenResponse();
   const list = paperStore.findAll();
   const summary = list.map(e => ({
     id: e.id,

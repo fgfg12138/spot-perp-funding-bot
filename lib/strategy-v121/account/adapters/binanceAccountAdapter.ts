@@ -48,6 +48,29 @@ function safeRawError(err: unknown): Record<string, unknown> {
 export class BinanceAccountAdapter implements IAccountAdapter {
   readonly exchangeId: ExchangeId = "binance";
 
+  /** 持仓模式缓存（同一执行内复用，避免每次平仓腿都查询）。 */
+  private positionModeCache: "hedge" | "one_way" | null = null;
+
+  /**
+   * 查询 Binance USDⓈ-M 合约持仓模式。
+   * Hedge Mode: dualSidePosition = true → 平空需 positionSide=SHORT，不发 reduceOnly。
+   * One-way Mode: dualSidePosition = false → 平空需 reduceOnly=true，不发 positionSide。
+   */
+  async getPositionMode(): Promise<"hedge" | "one_way"> {
+    if (this.positionModeCache) return this.positionModeCache;
+    try {
+      const data = await this.signedGet(FUTURES, "/fapi/v1/positionSide/dual");
+      const dual = data?.dualSidePosition === true;
+      this.positionModeCache = dual ? "hedge" : "one_way";
+      return this.positionModeCache;
+    } catch {
+      // 查询失败时默认 One-way（更安全的 fallback：reduceOnly 在两种模式下都不会开新仓）
+      this.positionModeCache = "one_way";
+      return "one_way";
+    }
+  }
+
+
   private async signedGet(base: string, path: string, extraParams?: Record<string, string>): Promise<any> {
     let query = `timestamp=${utcTimestampMs()}&recvWindow=5000`;
     if (extraParams) {
@@ -252,9 +275,14 @@ export class BinanceAccountAdapter implements IAccountAdapter {
   async submitOrderLeg(leg: import("../../execution/orderTypes").PlannedOrderLeg, options: { dryRun: boolean; explicitConfirm?: string }): Promise<import("../../execution/orderExecutionTypes").ExchangeOrderSubmissionResult> {
     if (leg.exchange !== "binance") return makeFailed(leg, "exchange_not_supported");
     if (leg.type !== "MARKET") return makeFailed(leg, "only_market_supported_first_version");
-    if (!options.dryRun && options.explicitConfirm !== "EXECUTE_REAL_TWO_LEG_ORDER") return makeFailed(leg, "explicit_confirm_required");
+    // 开仓腿用开仓确认串；平仓腿用平仓确认串（独立门控，不交叉授权）
+    const isCloseLeg = leg.role === "spot_sell" || leg.role === "perp_buy_close";
+    const expectedConfirm = isCloseLeg ? "EXECUTE_REAL_CLOSE_POSITION" : "EXECUTE_REAL_TWO_LEG_ORDER";
+    if (!options.dryRun && options.explicitConfirm !== expectedConfirm) return makeFailed(leg, "explicit_confirm_required");
     if (leg.role === "spot_buy") return this.submitSpotBuyMarket(leg, options.dryRun);
     if (leg.role === "perp_short") return this.submitPerpShortMarket(leg, options.dryRun);
+    if (leg.role === "perp_buy_close") return this.submitPerpBuyCloseMarket(leg, options.dryRun);
+    if (leg.role === "spot_sell") return this.submitSpotSellMarket(leg, options.dryRun);
     return makeFailed(leg, "unsupported_order_leg_role");
   }
 
@@ -266,7 +294,7 @@ export class BinanceAccountAdapter implements IAccountAdapter {
       const data = await this.signedGet(base, path, { symbol: sym, origClientOrderId: input.clientOrderId });
       return {
         ok: true, exchange: "binance", symbol: input.symbol, market: input.market,
-        role: data.side === "BUY" ? "spot_buy" : "perp_short",
+        role: data.side === "BUY" ? (input.market === "perp" ? "perp_buy_close" : "spot_buy") : (input.market === "spot" ? "spot_sell" : "perp_short"),
         clientOrderId: input.clientOrderId,
         exchangeOrderId: String(data.orderId ?? ""),
         status: data.status ?? "UNKNOWN",
@@ -276,7 +304,7 @@ export class BinanceAccountAdapter implements IAccountAdapter {
         submittedAtUtc: new Date().toISOString(),
       };
     } catch (e: any) {
-      return { ok: false, exchange: "binance", symbol: input.symbol, market: input.market, role: "spot_buy", clientOrderId: input.clientOrderId, status: "UNKNOWN", submittedAtUtc: new Date().toISOString(), error: e.message };
+      return { ok: false, exchange: "binance", symbol: input.symbol, market: input.market, role: input.market === "spot" ? "spot_sell" : "perp_buy_close", clientOrderId: input.clientOrderId, status: "UNKNOWN", submittedAtUtc: new Date().toISOString(), error: e.message };
     }
   }
 
@@ -314,6 +342,61 @@ export class BinanceAccountAdapter implements IAccountAdapter {
       return normalizeFuturesResponse(response, leg);
     } catch (e: any) {
       return { ok: false, exchange: "binance", symbol: leg.symbol, market: "perp", role: "perp_short", clientOrderId: leg.clientOrderId, status: "REJECTED", submittedAtUtc: new Date().toISOString(), error: e.message };
+    }
+  }
+
+  /**
+   * 永续 BUY 平空（close short）— 按持仓模式分支：
+   * - Hedge Mode: side=BUY, positionSide=SHORT，不发 reduceOnly
+   * - One-way Mode: side=BUY, reduceOnly=true，不发 positionSide
+   *
+   * Binance USDⓈ-M 规则：Hedge Mode 下不能发 reduceOnly；One-way Mode 下不能发 positionSide。
+   * PlannedCloseOrderLeg.reduceOnly / positionSide 是内部语义标记，此处按模式转换。
+   */
+  private async submitPerpBuyCloseMarket(leg: import("../../execution/orderTypes").PlannedOrderLeg, dryRun: boolean): Promise<import("../../execution/orderExecutionTypes").ExchangeOrderSubmissionResult> {
+    if (dryRun) return dryRunResult(leg, "NEW");
+    if (process.env.V121_ENABLE_REAL_CLOSE_EXECUTION !== "1") return makeFailed(leg, "real_close_execution_env_disabled");
+    try {
+      const sym = leg.symbol.replace("/", "");
+      const mode = await this.getPositionMode();
+      const params: Record<string, string> = {
+        symbol: sym, side: "BUY", type: "MARKET",
+        quantity: normalizeAmount(leg.quantity),
+        newClientOrderId: leg.clientOrderId,
+        recvWindow: "5000", timestamp: String(utcTimestampMs()),
+      };
+      if (mode === "hedge") {
+        // Hedge Mode: positionSide=SHORT，不传 reduceOnly
+        params.positionSide = "SHORT";
+      } else {
+        // One-way Mode: reduceOnly=true，不传 positionSide
+        params.reduceOnly = "true";
+      }
+      const response = await this.signedPost(FUTURES, "/fapi/v1/order", params);
+      return normalizeFuturesCloseResponse(response, leg);
+    } catch (e: any) {
+      return { ok: false, exchange: "binance", symbol: leg.symbol, market: "perp", role: "perp_buy_close", clientOrderId: leg.clientOrderId, status: "REJECTED", submittedAtUtc: new Date().toISOString(), error: e.message };
+    }
+  }
+
+  /**
+   * 现货 SELL 卖出（close spot long）— quantity 模式，不是 quoteOrderQty。
+   */
+  private async submitSpotSellMarket(leg: import("../../execution/orderTypes").PlannedOrderLeg, dryRun: boolean): Promise<import("../../execution/orderExecutionTypes").ExchangeOrderSubmissionResult> {
+    if (dryRun) return dryRunResult(leg, "NEW");
+    if (process.env.V121_ENABLE_REAL_CLOSE_EXECUTION !== "1") return makeFailed(leg, "real_close_execution_env_disabled");
+    try {
+      const sym = leg.symbol.replace("/", "");
+      const response = await this.signedPost(SPOT, "/api/v3/order", {
+        symbol: sym, side: "SELL", type: "MARKET",
+        quantity: normalizeAmount(leg.quantity),
+        newClientOrderId: leg.clientOrderId,
+        newOrderRespType: "FULL",
+        recvWindow: "5000", timestamp: String(utcTimestampMs()),
+      });
+      return normalizeSpotCloseResponse(response, leg);
+    } catch (e: any) {
+      return { ok: false, exchange: "binance", symbol: leg.symbol, market: "spot", role: "spot_sell", clientOrderId: leg.clientOrderId, status: "REJECTED", submittedAtUtc: new Date().toISOString(), error: e.message };
     }
   }
 }
@@ -359,6 +442,38 @@ function normalizeFuturesResponse(response: any, leg: import("../../execution/or
     executedQty: Number(response.executedQty ?? 0),
     executedQuoteQty: Number(response.cummulativeQuoteQty ?? 0),
     avgPrice: Number(response.avgPrice ?? 0),
+    submittedAtUtc: new Date().toISOString(),
+    raw: response,
+  };
+}
+
+function normalizeFuturesCloseResponse(response: any, leg: import("../../execution/orderTypes").PlannedOrderLeg): import("../../execution/orderExecutionTypes").ExchangeOrderSubmissionResult {
+  const status = response.status ?? "UNKNOWN";
+  return {
+    ok: status !== "REJECTED",
+    exchange: "binance", symbol: leg.symbol, market: "perp", role: "perp_buy_close",
+    clientOrderId: leg.clientOrderId,
+    exchangeOrderId: String(response.orderId ?? ""),
+    status,
+    executedQty: Number(response.executedQty ?? 0),
+    executedQuoteQty: Number(response.cummulativeQuoteQty ?? 0),
+    avgPrice: Number(response.avgPrice ?? 0),
+    submittedAtUtc: new Date().toISOString(),
+    raw: response,
+  };
+}
+
+function normalizeSpotCloseResponse(response: any, leg: import("../../execution/orderTypes").PlannedOrderLeg): import("../../execution/orderExecutionTypes").ExchangeOrderSubmissionResult {
+  const status = response.status ?? "UNKNOWN";
+  return {
+    ok: status !== "REJECTED",
+    exchange: "binance", symbol: leg.symbol, market: "spot", role: "spot_sell",
+    clientOrderId: leg.clientOrderId,
+    exchangeOrderId: String(response.orderId ?? ""),
+    status,
+    executedQty: Number(response.executedQty ?? 0),
+    executedQuoteQty: Number(response.cummulativeQuoteQty ?? 0),
+    avgPrice: Number(response.avgPrice ?? response.fills?.[0]?.price ?? 0),
     submittedAtUtc: new Date().toISOString(),
     raw: response,
   };

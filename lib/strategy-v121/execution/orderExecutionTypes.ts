@@ -26,7 +26,7 @@ export interface ExchangeOrderSubmissionResult {
   exchange: ExchangeId;
   symbol: string;
   market: "spot" | "perp";
-  role: "spot_buy" | "perp_short";
+  role: "spot_buy" | "perp_short" | "spot_sell" | "perp_buy_close";
   clientOrderId: string;
   exchangeOrderId?: string;
   status: ExchangeOrderStatus;

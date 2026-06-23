@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
+import { isDevToolsEnabled, devToolsForbiddenResponse } from "@/lib/strategy-v121/runtime/devToolsGate";
 import { getPersistenceMode, isPersistenceReadyForTiny } from "@/lib/strategy-v121/persistence/persistenceMode";
 import { getRepository } from "@/lib/strategy-v121/persistence/repositoryFactory";
 import { ALL_TABLE_NAMES } from "@/lib/strategy-v121/persistence/sqliteSchema";
 
 /** GET /api/v121/persistence/status */
 export async function GET() {
+  if (!isDevToolsEnabled()) return devToolsForbiddenResponse();
   const mode = getPersistenceMode();
   const repo = getRepository();
 

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
+import { isDevToolsEnabled, devToolsForbiddenResponse } from "@/lib/strategy-v121/runtime/devToolsGate";
 
 export async function POST() {
+  if (!isDevToolsEnabled()) return devToolsForbiddenResponse();
   try {
     const { selectLeastLossRehearsalCandidate } = await import(
       "@/lib/strategy-v121/opportunity/leastLossRehearsalSelector"

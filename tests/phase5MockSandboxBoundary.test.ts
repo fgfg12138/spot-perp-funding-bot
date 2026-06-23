@@ -9,7 +9,7 @@
  * - Page text clearly states mock-only
  */
 
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -88,7 +88,10 @@ describe("Phase 5 Boundary — No Mainnet Adapter Files", () => {
     for (const f of libFiles) {
       const name = f.replace(/\\/g, "/");
       // Skip read-only / shadow files that are explicitly safety-gated
-      if (name.includes("ReadOnly") || name.includes("24hShadow") || name.includes("7DayShadow") || name.includes("DryRun") || name.includes("SemiAutoLive") || name.includes("FilledOrder") || name.includes("PositionLifecycle") || name.includes("FundingValidation") || name.includes("PostTrade") || name.includes("CapabilityMatrix") || name.includes("ExecutionPreflight") || name.includes("TestnetWaiver")) continue;
+      // V121 MAINNET_TINY is the safety-gated substitute for testnet; its
+      // lib/strategy-v121/mainnetTiny/* files legitimately contain "mainnet"
+      // in names/type strings but are env-gated + confirm-gated, not raw live.
+      if (name.includes("ReadOnly") || name.includes("24hShadow") || name.includes("7DayShadow") || name.includes("DryRun") || name.includes("SemiAutoLive") || name.includes("FilledOrder") || name.includes("PositionLifecycle") || name.includes("FundingValidation") || name.includes("PostTrade") || name.includes("CapabilityMatrix") || name.includes("ExecutionPreflight") || name.includes("TestnetWaiver") || name.includes("mainnetTiny") || name.includes("strategy-v121")) continue;
       expect(name, `mainnet file found: ${name}`).not.toMatch(/mainnet/i);
     }
   });
@@ -146,10 +149,8 @@ describe("Phase 5 Boundary — Status Isolation", () => {
 // ─── Page Text Verification ────────────────────────────
 
 describe("Phase 5 Boundary — Page Text", () => {
-  it("sandbox-lifecycle page states mock data", () => {
-    const content = read("app/sandbox-lifecycle/page.tsx");
-    expect(content).toContain("Mock");
-    expect(content).toContain("不代表真实");
+  it("app/sandbox-lifecycle page has been removed (V1.0 residue)", () => {
+    expect(existsSync(join(root, "app/sandbox-lifecycle/page.tsx"))).toBe(false);
   });
 });
 

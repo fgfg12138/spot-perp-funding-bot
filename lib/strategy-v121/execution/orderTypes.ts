@@ -1,6 +1,6 @@
 import type { ExchangeId } from "../domain/types";
 
-export type OrderLegRole = "spot_buy" | "perp_short";
+export type OrderLegRole = "spot_buy" | "perp_short" | "spot_sell" | "perp_buy_close";
 
 export type PlannedOrderType = "MARKET" | "LIMIT";
 
@@ -22,8 +22,9 @@ export interface PlannedOrderLeg {
   quoteNotionalUsdt: number;
   estimatedPrice: number;
   clientOrderId: string;
-  reduceOnly: false;
-  positionSide?: "SHORT";
+  /** 语义标记：开仓腿为 false，平仓腿为 true。adapter 按持仓模式转换。 */
+  reduceOnly: boolean;
+  positionSide?: "SHORT" | "LONG" | "BOTH";
   constraints: {
     minQty?: number;
     stepSize?: number;
