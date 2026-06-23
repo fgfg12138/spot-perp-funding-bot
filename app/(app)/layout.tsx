@@ -35,11 +35,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const devToolsEnabled = process.env.V121_ENABLE_DEV_TOOLS === "1";
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100">
-      <header className="border-b border-gray-800 px-6 py-3">
-        <div className="flex items-center gap-6">
-          <h1 className="text-lg font-bold text-cyan-400">期现套利</h1>
-          <nav className="flex flex-wrap gap-4 text-sm">
+    <div className="product-app-shell min-h-screen bg-gray-950 text-gray-100">
+      <header className="border-b border-gray-800 px-4 py-2">
+        <div className="flex items-center gap-4">
+          <h1 className="text-xl font-bold text-cyan-400">期现套利</h1>
+          <nav className="flex flex-wrap gap-3 text-base font-medium">
             {PRODUCT_NAV.map((item) => (
               <Link
                 key={item.href}
@@ -52,13 +52,13 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </nav>
         </div>
         {devToolsEnabled ? (
-          <div className="mt-2 flex flex-wrap items-center gap-4 border-t border-gray-800 pt-2">
-            <span className="text-xs text-amber-400">开发者</span>
+          <div className="mt-2 flex flex-wrap items-center gap-3 border-t border-gray-800 pt-2">
+            <span className="text-sm text-amber-400">开发者</span>
             {DEV_NAV.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
-                className="text-xs text-amber-300 transition-colors hover:text-amber-200"
+                className="text-sm text-amber-300 transition-colors hover:text-amber-200"
               >
                 {item.label}
               </Link>
@@ -66,7 +66,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </div>
         ) : null}
       </header>
-      <main className="p-6">{children}</main>
+      <main className="px-4 py-4">{children}</main>
     </div>
   );
 }
