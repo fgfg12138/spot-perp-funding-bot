@@ -174,6 +174,7 @@ describe("Safety — No Mainnet Capability", () => {
     // V121 app surface referencing MAINNET_TINY dev nav / pages / routes.
     "(app)/layout.tsx",
     "(app)/trade/open/page.tsx",
+    "(app)/trade/close/page.tsx",
     "v121/layout.tsx",
     "v121/intents/page.tsx",
     "v121/mainnet-tiny/page.tsx",
