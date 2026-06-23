@@ -36,12 +36,20 @@ interface OppsState {
   dataSource?: string;
 }
 
+interface AccountsState {
+  count?: number;
+  arbCapableCount?: number;
+  crossArbCapableCount?: number;
+  masterKeyConfigured?: boolean;
+}
+
 export default function DashboardPage() {
   const [health, setHealth] = useState<HealthState | null>(null);
   const [worker, setWorker] = useState<WorkerState | null>(null);
   const [risk, setRisk] = useState<RiskState | null>(null);
   const [opps, setOpps] = useState<OppsState | null>(null);
   const [positions, setPositions] = useState<{ positions?: any[]; total?: number } | null>(null);
+  const [accounts, setAccounts] = useState<AccountsState | null>(null);
 
   useEffect(() => {
     const fetchAll = () => {
@@ -50,6 +58,26 @@ export default function DashboardPage() {
       fetch("/api/v121/risk").then((r) => r.json()).then(setRisk).catch(() => {});
       fetch("/api/v121/opportunities").then((r) => r.json()).then(setOpps).catch(() => {});
       fetch("/api/v121/positions").then((r) => r.json()).then(setPositions).catch(() => {});
+      fetch("/api/v121/exchange-accounts")
+        .then((r) => r.json())
+        .then((d) => {
+          if (d.ok) {
+            const accList = d.accounts ?? [];
+            const arbCapable = accList.filter(
+              (a: any) => a.capability?.sameExchangeArbEnabled,
+            ).length;
+            const crossArbCapable = accList.filter(
+              (a: any) => a.capability?.crossExchangeArbEnabled,
+            ).length;
+            setAccounts({
+              count: d.count ?? 0,
+              arbCapableCount: arbCapable,
+              crossArbCapableCount: crossArbCapable,
+              masterKeyConfigured: d.masterKeyConfigured,
+            });
+          }
+        })
+        .catch(() => {});
     };
     fetchAll();
     const i = setInterval(fetchAll, 10000);
@@ -84,6 +112,30 @@ export default function DashboardPage() {
         href: "/risk",
         label: "前往风控",
         tone: "red",
+      };
+    }
+    if (accounts && accounts.masterKeyConfigured === false) {
+      return {
+        text: "本地加密密钥未配置，暂不能保存交易所账户。请联系运维人员设置服务端加密主密钥。",
+        href: "/settings?section=exchange-accounts",
+        label: "前往设置",
+        tone: "yellow",
+      };
+    }
+    if (accounts && accounts.count === 0) {
+      return {
+        text: "请先连接交易所账户。连接后系统可读取真实账户状态并执行受控套利。",
+        href: "/settings?section=exchange-accounts",
+        label: "连接账户",
+        tone: "yellow",
+      };
+    }
+    if (accounts && accounts.arbCapableCount === 0 && (accounts.count ?? 0) > 0) {
+      return {
+        text: `已连接 ${accounts.count} 个交易所账户，但暂无具备套利执行权限的账户。请前往设置页进行权限检测。`,
+        href: "/settings?section=exchange-accounts",
+        label: "权限检测",
+        tone: "yellow",
       };
     }
     if (hasDeviationIssue) {
@@ -156,6 +208,21 @@ export default function DashboardPage() {
             ? new Date(opps.scannedAtUtc).toLocaleTimeString("zh-CN")
             : "未扫描"}
           color="blue"
+        />
+        <StatusCard
+          label="交易所账户"
+          value={`${accounts?.count ?? 0}`}
+          color={(accounts?.count ?? 0) > 0 ? "cyan" : "yellow"}
+        />
+        <StatusCard
+          label="本所套利可用"
+          value={`${accounts?.arbCapableCount ?? 0}`}
+          color={(accounts?.arbCapableCount ?? 0) > 0 ? "green" : "slate"}
+        />
+        <StatusCard
+          label="跨所套利可用"
+          value={`${accounts?.crossArbCapableCount ?? 0}`}
+          color={(accounts?.crossArbCapableCount ?? 0) > 0 ? "green" : "slate"}
         />
       </div>
 
