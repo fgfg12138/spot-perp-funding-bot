@@ -35,8 +35,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const devToolsEnabled = process.env.V121_ENABLE_DEV_TOOLS === "1";
 
   return (
-    <div className="product-app-shell min-h-screen bg-gray-950 text-gray-100">
-      <header className="border-b border-gray-800 px-4 py-2">
+    <div className="product-app-shell min-h-screen bg-gray-950 text-[15px] text-gray-100">
+      <header className="border-b border-gray-800 px-3 py-2">
         <div className="flex items-center gap-4">
           <h1 className="text-xl font-bold text-cyan-400">期现套利</h1>
           <nav className="flex flex-wrap gap-3 text-base font-medium">
@@ -66,7 +66,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </div>
         ) : null}
       </header>
-      <main className="px-4 py-4">{children}</main>
+      <main className="px-3 py-3">{children}</main>
     </div>
   );
 }
