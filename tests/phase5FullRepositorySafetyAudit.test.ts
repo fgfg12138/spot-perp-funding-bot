@@ -86,6 +86,12 @@ describe("Safety — No Secret Decryption or Signing", () => {
   // V121 MAINNET_TINY legitimately has server-side signing for real Binance
   // orders, gated by V121_ENABLE_REAL_ORDER_EXECUTION + guardedOrderExecutor +
   // explicitConfirm. These are not V1.0 testnet signing; exempt them.
+  //
+  // Phase 5 exchange-accounts also legitimately uses decryptSecret (to decrypt
+  // stored API keys for probeAccount) and createHmac (runtime Binance signing
+  // with injected keys via runtimeAdapterFactory). These are server-side only,
+  // gated by V121_MASTER_KEY + runtimeAdapterFactory (read-only adapter, no
+  // order/transfer methods). Exempt them the same way as account adapters.
   const skipFiles = [
     "apiKeys/crypto", "security/apiKeyCrypto", "security/index", "BinanceSigning",
     "types.ts", "Types.ts",
@@ -93,6 +99,8 @@ describe("Safety — No Secret Decryption or Signing", () => {
     "strategy-v121/account/adapters/binanceAccountAdapter",
     "strategy-v121/account/adapters/htxAccountAdapter",
     "strategy-v121/account/adapters/okxAccountAdapter",
+    "strategy-v121/exchange-accounts/exchangeAccountService",
+    "strategy-v121/exchange-accounts/runtimeAdapterFactory",
   ];
 
   const allRun = [
@@ -211,18 +219,45 @@ describe("Safety — No Mainnet Capability", () => {
 // ─── 6. API Key Page ─────────────────────────────────────
 
 describe("Safety — API Key Page", () => {
-  // The V1.0 app/api-keys page was removed during V121 productization. V121
-  // does not store user API keys via a product page; secrets live server-side
-  // and are gated by V121_ENABLE_REAL_ORDER_EXECUTION + guardedOrderExecutor.
-  it("app/api-keys page has been removed (V1.0 residue)", () => {
+  // The V1.0 app/api-keys product page was removed during V121 productization.
+  // V121 now provides server-side encrypted exchange-account binding via the
+  // dev-tools-gated page app/v121/api-keys (V121_ENABLE_DEV_TOOLS=1) and API
+  // routes under app/api/v121/exchange-accounts/**. Secrets are encrypted with
+  // AES-256-GCM using V121_MASTER_KEY, never returned to the frontend, and
+  // real-order execution remains gated by V121_ENABLE_REAL_ORDER_EXECUTION +
+  // guardedOrderExecutor + killSwitch. The old V1.0 product-facing
+  // app/api-keys page and app/api/{keys,api-keys} endpoints must stay removed.
+  it("app/api-keys product page has been removed (V1.0 residue)", () => {
     expect(existsSync(join(root, "app/api-keys/page.tsx"))).toBe(false);
   });
 
-  it("no POST endpoint to save keys", () => {
+  it("no V1.0 POST endpoint to save keys (app/api/keys|api-keys)", () => {
     let dirs: string[] = [];
     try { dirs = readdirSync(join(root, "app", "api")).filter((e) => !e.startsWith(".")); } catch { /* ok */ }
     expect(dirs.includes("keys")).toBe(false);
     expect(dirs.includes("api-keys")).toBe(false);
+  });
+
+  it("V121 exchange-accounts API never returns raw secrets in responses", () => {
+    const routeDir = join("app", "api", "v121", "exchange-accounts");
+    if (!existsSync(join(root, routeDir))) return;
+    const routes = collectFiles(routeDir, (n) => n === "route.ts");
+    for (const f of routes) {
+      const code = stripComments(readFileSync(f, "utf8"));
+      // 响应体 NextResponse.json({...}) 中不应直接包含 apiKey/apiSecret 明文字段
+      const responseBlocks = code.match(/NextResponse\.json\(\s*\{[^}]*\}/g) || [];
+      for (const block of responseBlocks) {
+        expect(block, `${f} response should not return raw apiKey`).not.toMatch(/apiKey\s*:/);
+        expect(block, `${f} response should not return raw apiSecret`).not.toMatch(/apiSecret\s*:/);
+      }
+    }
+  });
+
+  it("V121 api-keys dev page exists only under app/v121/ (dev-tools gated)", () => {
+    // 成品路由组 app/(app)/** 下不应有 api-keys 页面
+    expect(existsSync(join(root, "app/(app)/api-keys/page.tsx"))).toBe(false);
+    // 开发者页面 app/v121/api-keys 受 V121_ENABLE_DEV_TOOLS 门控
+    expect(existsSync(join(root, "app/v121/api-keys/page.tsx"))).toBe(true);
   });
 });
 

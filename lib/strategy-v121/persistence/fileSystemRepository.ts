@@ -68,6 +68,22 @@ export class FileSystemRepository implements IPersistenceRepository {
     }
   }
 
+  /** Delete a single record by primary key (column name "id"). No-op if missing. */
+  deleteById(table: string, id: string): void {
+    const filePath = path.join(this.basePath, `${table}.jsonl`);
+    if (!fs.existsSync(filePath)) return;
+    const lines = fs.readFileSync(filePath, "utf-8").trim().split("\n").filter(Boolean);
+    const kept = lines.filter(line => {
+      try {
+        const rec = JSON.parse(line);
+        return rec.id !== id;
+      } catch {
+        return true; // 无法解析的行保留
+      }
+    });
+    fs.writeFileSync(filePath, kept.length > 0 ? kept.join("\n") + "\n" : "", "utf-8");
+  }
+
   /** List all table names (based on existing files). */
   listTables(): string[] {
     if (!fs.existsSync(this.basePath)) return [];

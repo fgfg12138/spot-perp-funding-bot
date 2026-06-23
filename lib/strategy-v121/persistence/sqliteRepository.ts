@@ -6,6 +6,8 @@
 
 import * as path from "node:path";
 import * as fs from "node:fs";
+import { getAllCreateTableSQL } from "./schema";
+import { getExtraCreateSQL, ALL_TABLE_NAMES } from "./sqliteSchema";
 
 export class SqliteRepository {
   private db: any;
@@ -21,8 +23,6 @@ export class SqliteRepository {
   }
 
   private initTables(): void {
-    const { getAllCreateTableSQL } = require("./schema");
-    const { getExtraCreateSQL } = require("./sqliteSchema");
     for (const sql of getAllCreateTableSQL()) {
       this.db.exec(sql);
     }
@@ -107,7 +107,15 @@ export class SqliteRepository {
       const rows = this.db.prepare(`SELECT * FROM "${table}" ORDER BY rowid`).all() as Record<string, unknown>[];
       return rows.map(row => {
         const result: Record<string, unknown> = {};
-        const boolCols = new Set(["gateAllowed","requiresManualConfirm","manualConfirmPassed","dryRun","realOrderExecutionEnabled","simulationOnly","realTradeEligible","passed","allowHtx","allowSmallCaps","allowCrossExchange","requireManualConfirm","allowAutoEntry","allowRiskExit","immutable","isTestThreshold"]);
+        const boolCols = new Set([
+          "gateAllowed","requiresManualConfirm","manualConfirmPassed","dryRun","realOrderExecutionEnabled","simulationOnly","realTradeEligible","passed","allowHtx","allowSmallCaps","allowCrossExchange","requireManualConfirm","allowAutoEntry","allowRiskExit","immutable","isTestThreshold",
+          // exchange_accounts / exchange_capabilities 布尔列
+          "enabled",
+          "read_balance","read_spot","read_perp",
+          "trade_spot","trade_perp","internal_transfer","funding_rate",
+          "positions","orders",
+          "same_exchange_arb_enabled","cross_exchange_arb_enabled",
+        ]);
         for (const [k, v] of Object.entries(row)) {
           if (typeof v === "string" && (v.startsWith("[") || v.startsWith("{"))) {
             try { result[k] = JSON.parse(v); } catch { result[k] = v; }
@@ -142,8 +150,11 @@ export class SqliteRepository {
     try { this.db.exec(`DELETE FROM "${table}"`); } catch { /* ignore */ }
   }
 
+  deleteById(table: string, id: string): void {
+    try { this.db.prepare(`DELETE FROM "${table}" WHERE id = ?`).run(id); } catch { /* ignore */ }
+  }
+
   listTables(): string[] {
-    const { ALL_TABLE_NAMES } = require("./sqliteSchema");
     return ALL_TABLE_NAMES;
   }
 

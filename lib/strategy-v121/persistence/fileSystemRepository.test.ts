@@ -84,4 +84,24 @@ describe("FileSystemRepository", () => {
     }
     expect(repo.listTables().length).toBeGreaterThanOrEqual(7);
   });
+
+  it("deleteById removes a specific record", () => {
+    repo.save("test_del", { id: "a", x: 1 });
+    repo.save("test_del", { id: "b", x: 2 });
+    repo.save("test_del", { id: "c", x: 3 });
+    expect(repo.count("test_del")).toBe(3);
+    repo.deleteById("test_del", "b");
+    expect(repo.count("test_del")).toBe(2);
+    expect(repo.query("test_del", r => r.id === "b")).toHaveLength(0);
+  });
+
+  it("deleteById is no-op for missing id", () => {
+    repo.save("test_del2", { id: "a", x: 1 });
+    repo.deleteById("test_del2", "nonexistent");
+    expect(repo.count("test_del2")).toBe(1);
+  });
+
+  it("deleteById is no-op for missing table", () => {
+    expect(() => repo.deleteById("nonexistent_table", "any")).not.toThrow();
+  });
 });

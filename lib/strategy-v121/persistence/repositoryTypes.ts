@@ -13,6 +13,8 @@ export interface IPersistenceRepository {
   latest(table: string): Record<string, unknown> | undefined;
   count(table: string): number;
   clear(table: string): void;
+  /** Delete a single record by primary key (column name "id"). No-op if missing. */
+  deleteById(table: string, id: string): void;
   listTables(): string[];
 }
 

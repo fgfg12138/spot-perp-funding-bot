@@ -190,6 +190,45 @@ export const EXTRA_TABLES: Record<string, string> = {
     CREATE INDEX IF NOT EXISTS idx_close_execution_ledger_position_id ON close_execution_ledger(position_id);
     CREATE INDEX IF NOT EXISTS idx_close_execution_ledger_status ON close_execution_ledger(status);
   `,
+  // P3：用户绑定的交易所 API 账户。仅存加密后的密钥 + 脱敏展示字段，明文永不落库。
+  EXCHANGE_ACCOUNTS: `
+    CREATE TABLE IF NOT EXISTS exchange_accounts (
+      id TEXT PRIMARY KEY,
+      exchange TEXT NOT NULL,
+      label TEXT NOT NULL,
+      masked_api_key TEXT NOT NULL,
+      encrypted_api_key_json TEXT NOT NULL,
+      encrypted_secret_json TEXT NOT NULL,
+      encrypted_passphrase_json TEXT,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      created_at_utc TEXT NOT NULL,
+      updated_at_utc TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_exchange_accounts_exchange ON exchange_accounts(exchange);
+    CREATE INDEX IF NOT EXISTS idx_exchange_accounts_enabled ON exchange_accounts(enabled);
+  `,
+  // P3：每个账户一行权限能力（探测结果）。主键 account_id，upsert 覆盖。
+  EXCHANGE_CAPABILITIES: `
+    CREATE TABLE IF NOT EXISTS exchange_capabilities (
+      account_id TEXT PRIMARY KEY,
+      exchange TEXT NOT NULL,
+      read_balance INTEGER NOT NULL DEFAULT 0,
+      read_spot INTEGER NOT NULL DEFAULT 0,
+      read_perp INTEGER NOT NULL DEFAULT 0,
+      trade_spot INTEGER NOT NULL DEFAULT 0,
+      trade_perp INTEGER NOT NULL DEFAULT 0,
+      internal_transfer INTEGER NOT NULL DEFAULT 0,
+      funding_rate INTEGER NOT NULL DEFAULT 0,
+      positions INTEGER NOT NULL DEFAULT 0,
+      orders INTEGER NOT NULL DEFAULT 0,
+      same_exchange_arb_enabled INTEGER NOT NULL DEFAULT 0,
+      cross_exchange_arb_enabled INTEGER NOT NULL DEFAULT 0,
+      last_checked_at_utc TEXT,
+      last_error TEXT,
+      raw_json TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_exchange_capabilities_exchange ON exchange_capabilities(exchange);
+  `,
 };
 
 export function getExtraCreateSQL(): string[] {
@@ -204,4 +243,5 @@ export const ALL_TABLE_NAMES = [
   "user_strategy_settings", "internal_transfer_ledger",
   "order_plan_ledger", "order_execution_ledger",
   "close_plan_ledger", "close_execution_ledger",
+  "exchange_accounts", "exchange_capabilities",
 ];
