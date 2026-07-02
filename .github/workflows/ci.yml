@@ -44,5 +44,8 @@ jobs:
       - name: I18N lint
         run: npm run lint:i18n
 
+      - name: ESLint no-explicit-any check
+        run: npx eslint lib/strategy-v121/ --max-warnings 0
+
       - name: V1.2.1 unit tests
         run: npx vitest run lib/strategy-v121

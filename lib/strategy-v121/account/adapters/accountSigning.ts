@@ -56,16 +56,17 @@ export function htxSign(
 ): Record<string, string> {
   const creds = getCredsOrThrow("htx");
 
+  const creds2 = getCredsOrThrow("htx");
   const sortedKeys = Object.keys(params).sort();
   const paramStr = sortedKeys
     .map(k => `${encodeURIComponent(k)}=${encodeURIComponent(params[k])}`)
     .join("&");
   const message = `${method}\n${host}\n${path}\n${paramStr}`;
-  const signature = crypto.createHmac("sha256", secret).update(message).digest("base64");
+  const signature = crypto.createHmac("sha256", creds2.apiSecret).update(message).digest("base64");
 
   return {
     ...params,
-    AccessKeyId: accessKey,
+    AccessKeyId: creds2.apiKey,
     SignatureMethod: "HmacSHA256",
     SignatureVersion: "2",
     Signature: signature,
