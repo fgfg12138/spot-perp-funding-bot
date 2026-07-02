@@ -23,13 +23,14 @@ directories:
   output: dist
 
 # 把整个项目作为额外资源拷贝到 resources/app/
+# ⚠️ 由于 .gitignore 中 node_modules/ 被忽略，electron-builder 会跳过它
+# 所以 node_modules 单独作为一个 extraResources 条目，直接从 node_modules/ 目录拷贝
 extraResources:
   - from: ./
     to: app
     filter:
-      # 只包含 build 产物和运行时必需的
+      # 只包含 build 产物和运行时必需的（不含 node_modules，下面单独处理）
       - ".next/**"
-      - "node_modules/**"
       - "package.json"
       - "next.config.ts"
       - "electron/**"
@@ -43,11 +44,13 @@ extraResources:
       # 排除开发/无用文件以减小体积
       - "!**/*.map"
       - "!.next/cache/**"
-      - "!node_modules/.cache/**"
       - "!.workbuddy/**"
       - "!docs/**"
       - "!.git/**"
       - "!__test_discover__*"
+  # node_modules 单独打包（绕开 .gitignore 的忽略规则）
+  - from: node_modules/
+    to: app/node_modules
   - from: .env.package
     to: .env
 

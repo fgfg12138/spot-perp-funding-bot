@@ -4,9 +4,10 @@
   "private": true,
   "main": "electron/main.js",
   "scripts": {
-    "dev": "next dev",
+    "dev": "concurrently -n next,worker -c cyan,yellow \"next dev\" \"npx tsx --env-file .env scripts/v121-worker.ts\"",
+    "dev:web": "next dev",
     "build": "next build",
-    "electron:dev": "concurrently \"next dev\" \"wait-on http://localhost:3000 && electron .\"",
+    "electron:dev": "concurrently -n next,worker,electron -c cyan,yellow,green \"next dev\" \"npx tsx --env-file .env scripts/v121-worker.ts\" \"wait-on http://localhost:3000 && electron .\"",
     "electron:build": "npm run build && electron-builder --win --config electron-builder.yml",
     "lint:i18n": "node scripts/lint-i18n.mjs",
     "start": "next start",
