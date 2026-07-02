@@ -1,0 +1,46 @@
+sequenceDiagram
+    participant Caller as 调用方
+    participant Store as PaperExecutionStore
+    participant Base as BasePersistence<PaperExecution>
+    participant Repo as FileSystemRepository
+    participant File as .v121-data/paper_executions.jsonl
+
+    Note over Caller,File: 初始化流程
+    Caller->>Store: new PaperExecutionStore()
+    Store->>Base: constructor(repo)
+    Base->>Repo: queryAll("paper_executions")
+    Repo->>File: readFileSync + split + JSON.parse
+    File-->>Repo: 记录数组
+    Repo-->>Base: Record<string,unknown>[]
+    Base->>Base: cache.set(id, record) 遍历
+    Base-->>Store: 初始化完成
+
+    Note over Caller,File: save 流程
+    Caller->>Store: save(ex)
+    Store->>Base: save(ex) [覆写]
+    Base->>Base: cache.set(ex.id, {...ex})
+    Base->>Base: flushToDisk()
+    Base->>Repo: clear("paper_executions")
+    Repo->>File: unlinkSync
+    File-->>Repo: ok
+    Base->>Repo: save("paper_executions", ex)
+    Repo->>File: appendFileSync (JSONL)
+    File-->>Repo: ok
+    Repo-->>Base: ok
+    Base-->>Store: ok
+
+    Note over Caller,File: findById 流程
+    Caller->>Store: findById("abc")
+    Store->>Base: findById("abc")
+    Base->>Base: cache.get("abc")
+    Base-->>Store: {...record} (浅拷贝)
+    Store-->>Caller: PaperExecution | undefined
+
+    Note over Caller,File: delete 流程
+    Caller->>Store: delete("abc")
+    Store->>Base: delete("abc")
+    Base->>Base: cache.delete("abc")
+    Base->>Base: flushToDisk()
+    Base->>Repo: clear + 逐条 save
+    Repo-->>Base: ok
+    Base-->>Store: ok

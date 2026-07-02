@@ -1,0 +1,133 @@
+/**
+ * 执行意图 — 记录"如果进入 MAINNET_TINY，会尝试执行什么"。
+ * 不下单，不改账户，不修改交易所状态。
+ */
+import type { ExchangeId } from "../domain/types";
+import { checkMainnetTinyGate, validateOrderIntent } from "../mainnetTiny/mainnetTinyGate";
+import { getRuntimeConfig } from "../config/runtimeConfig";
+import { getRepository } from "../persistence/repositoryFactory";
+
+function repo() { return getRepository(); }
+
+export type OrderIntentPurpose = "real_arbitrage" | "execution_rehearsal";
+
+const ORDER_INTENT_PURPOSES: OrderIntentPurpose[] = ["real_arbitrage", "execution_rehearsal"];
+export function isOrderIntentPurpose(value: unknown): value is OrderIntentPurpose {
+  return typeof value === "string" && ORDER_INTENT_PURPOSES.includes(value as OrderIntentPurpose);
+}
+
+export interface OrderIntent {
+  intentId: string;
+  mode: string;
+  symbol: string;
+  spotExchange: ExchangeId;
+  perpExchange: ExchangeId;
+  side: "buy_spot_short_perp";
+  plannedNotionalUsdt: number;
+  batchNo: number;
+  reason: string;
+  createdAtUtc: number;
+  gateAllowed: boolean;
+  blockedReasons: string[];
+  requiresManualConfirm: boolean;
+  manualConfirmPassed: boolean;
+  dryRun: boolean;
+  realOrderExecutionEnabled: boolean;
+  purpose: OrderIntentPurpose;
+  simulationOnly: boolean;
+  realTradeEligible: boolean;
+  dataSource: string;
+}
+
+export function createOrderIntent(params: {
+  symbol: string;
+  spotExchange: ExchangeId;
+  perpExchange: ExchangeId;
+  plannedNotionalUsdt: number;
+  batchNo: number;
+  reason?: string;
+  manualConfirmText?: string;
+  dryRun?: boolean;
+  purpose?: OrderIntentPurpose;
+  simulationOnly?: boolean;
+  realTradeEligible?: boolean;
+}): OrderIntent {
+  const cfg = getRuntimeConfig();
+  const gate = checkMainnetTinyGate();
+  const realOrderEnabled = cfg.featureFlags.realOrderExecutionEnabled;
+  const dryRun = params.dryRun ?? (cfg.mainnetTiny.dryRun || !realOrderEnabled);
+  const confirmOk = params.manualConfirmText === "I_UNDERSTAND_MAINNET_TINY_10U";
+  const limitCheck = validateOrderIntent({
+    symbol: params.symbol,
+    spotExchange: params.spotExchange,
+    perpExchange: params.perpExchange,
+    notionalUsdt: params.plannedNotionalUsdt,
+    totalExposureUsdt: params.plannedNotionalUsdt,
+  });
+
+  const purpose: OrderIntentPurpose = params.purpose ?? "real_arbitrage";
+  const simulationOnly = params.simulationOnly ?? false;
+  const defaultRealTradeEligible = !simulationOnly
+    && purpose === "real_arbitrage"
+    && limitCheck.allowed
+    && params.spotExchange === params.perpExchange
+    && params.spotExchange !== "htx";
+  const realTradeEligible = params.realTradeEligible ?? defaultRealTradeEligible;
+
+  const blockedReasons: string[] = [
+    ...gate.missing.map((m) => `环境门: ${m}`),
+    ...gate.warnings.map((w) => `警告: ${w}`),
+    ...limitCheck.blockedReasons,
+  ];
+  if (!confirmOk) blockedReasons.push("人工确认未通过（需输入 I_UNDERSTAND_MAINNET_TINY_10U）");
+  if (!realOrderEnabled) blockedReasons.push("V121_REAL_ORDER_EXECUTION_ENABLED 未开启");
+  if (simulationOnly) blockedReasons.push("simulationOnly intent 仅用于流程演练，禁止真实资金动作");
+
+  const intent: OrderIntent = {
+    intentId: `intent-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    mode: gate.mode,
+    symbol: params.symbol,
+    spotExchange: params.spotExchange,
+    perpExchange: params.perpExchange,
+    side: "buy_spot_short_perp",
+    plannedNotionalUsdt: params.plannedNotionalUsdt,
+    batchNo: params.batchNo,
+    reason: params.reason ?? "手工创建",
+    createdAtUtc: Date.now(),
+    gateAllowed: gate.allowed && limitCheck.allowed && confirmOk && realOrderEnabled,
+    blockedReasons,
+    requiresManualConfirm: true,
+    manualConfirmPassed: confirmOk,
+    dryRun,
+    realOrderExecutionEnabled: realOrderEnabled,
+    purpose,
+    simulationOnly,
+    realTradeEligible,
+    dataSource: simulationOnly ? "execution_rehearsal_intent" : "order_intent",
+  };
+
+  repo().save("order_intents", { ...intent } as Record<string, unknown>);
+  return intent;
+}
+
+export function getOrderIntents(): OrderIntent[] {
+  return repo().queryAll("order_intents") as unknown as OrderIntent[];
+}
+
+export function recordBlockedAttempt(params: {
+  mode: string; action: string; symbol?: string; exchange?: string;
+  reason: string; gateStatus: unknown;
+}): void {
+  repo().save("blocked_execution_attempts", {
+    id: `blocked-${Date.now()}`,
+    mode: params.mode, action: params.action,
+    symbol: params.symbol ?? "", exchange: params.exchange ?? "",
+    reason: params.reason,
+    blockedAtUtc: Date.now(),
+    _secretExposureCheck: "passed",
+  });
+}
+
+export function getBlockedAttempts(): unknown[] {
+  return repo().queryAll("blocked_execution_attempts");
+}

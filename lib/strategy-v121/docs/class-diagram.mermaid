@@ -1,0 +1,48 @@
+classDiagram
+    class KillSwitchState {
+        <<enumeration>>
+        OFF
+        READ_ONLY_ONLY
+        PAUSE_NEW_ENTRIES
+        PAUSE_ALL_AUTOMATION
+    }
+
+    class KillSwitchRecord {
+        +KillSwitchState state
+        +string updatedAtUtc
+        +string updatedBy
+        +string reason
+    }
+
+    class KillSwitchStore {
+        +load() KillSwitchRecord
+        +save(state, meta) void
+        +getRecord() KillSwitchRecord
+    }
+
+    class KillSwitch {
+        -KillSwitchState currentKillSwitch
+        +getKillSwitch() KillSwitchState
+        +setKillSwitch(state, meta) void
+        +isActionAllowed(action, killSwitch) boolean
+        +canTrade(killSwitch) boolean
+        +blocksNewEntries(killSwitch) boolean
+    }
+
+    class DecimalMath {
+        +mul(a, b) number
+        +div(a, b) number
+        +add(a, b) number
+        +sub(a, b) number
+    }
+
+    class CapitalPlanner {
+        +computeCapitalPlan(input) CapitalPlan
+        +computeCapitalPlanSafe(input) CapitalPlan
+        +checkLiquidationDistance(input) LiquidationCheckResult
+    }
+
+    KillSwitch --> KillSwitchState : uses
+    KillSwitch --> KillSwitchStore : persists to
+    KillSwitchStore --> KillSwitchRecord : manages
+    CapitalPlanner --> DecimalMath : uses for precision

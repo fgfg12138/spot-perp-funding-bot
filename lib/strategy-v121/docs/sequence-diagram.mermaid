@@ -1,0 +1,37 @@
+sequenceDiagram
+    participant App as Application
+    participant KS as killSwitch.ts
+    participant Store as killSwitchStore.ts
+    participant FS as FileSystem (.v121-data/)
+    participant Worker as Worker Process
+
+    Note over App,Worker: --- Startup ---
+    App->>KS: import killSwitch
+    KS->>Store: load()
+    Store->>FS: readFile(kill-switch.json)
+    FS-->>Store: {state: "PAUSE_ALL_AUTOMATION", ...}
+    Store-->>KS: KillSwitchRecord
+    KS->>KS: currentKillSwitch = "PAUSE_ALL_AUTOMATION"
+    KS-->>App: module ready, state = PAUSE_ALL_AUTOMATION
+
+    Note over App,Worker: --- Runtime: Set Kill Switch ---
+    App->>KS: setKillSwitch("OFF", {updatedBy: "manual", reason: "人工恢复"})
+    KS->>KS: currentKillSwitch = "OFF"
+    KS->>Store: save("OFF", {updatedBy: "manual", reason: "人工恢复"})
+    Note over KS,Store: queueMicrotask — 异步，不阻塞
+    Store->>FS: writeFile(kill-switch.json)
+    Store-->>KS: ok
+    KS-->>App: void (no return)
+
+    Note over App,Worker: --- Runtime: Permission Check ---
+    Worker->>KS: isActionAllowed("OPEN")
+    KS->>KS: check currentKillSwitch
+    KS-->>Worker: true / false
+
+    Note over App,Worker: --- capitalPlanner with Decimal ---
+    App->>CapitalPlanner: computeCapitalPlan({totalCapital: 10000})
+    CapitalPlanner->>DecimalMath: mul(10000, 0.30)
+    DecimalMath-->>CapitalPlanner: 3000
+    CapitalPlanner->>DecimalMath: div(shortNotional, 1.5)
+    DecimalMath-->>CapitalPlanner: 2000
+    CapitalPlanner-->>App: CapitalPlan { spotAmount: 3000, ... }

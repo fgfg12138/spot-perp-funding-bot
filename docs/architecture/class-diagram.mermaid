@@ -1,0 +1,87 @@
+classDiagram
+    class IPersistenceRepository {
+        <<interface>>
+        +save(table: string, record: Record~string, unknown~): void
+        +saveAll(table: string, records: Record~string,unknown~[]): void
+        +queryAll(table: string): Record~string,unknown~[]
+        +query(table: string, filter: Function): Record~string,unknown~[]
+        +latest(table: string): Record~string,unknown~| undefined
+        +count(table: string): number
+        +clear(table: string): void
+        +deleteById(table: string, id: string): void
+        +listTables(): string[]
+    }
+
+    class BasePersistence~T~ {
+        <<abstract>>
+        #abstract tableName: string
+        #repo: IPersistenceRepository
+        #useCache: boolean
+        #cache: Map~string, T~
+        +constructor(repo?: IPersistenceRepository)
+        #loadFromDisk(): void
+        #flushToDisk(): void
+        +save(record: T): void
+        +saveAll(records: T[]): void
+        +findById(id: string): T | undefined
+        +findAll(): T[]
+        +delete(id: string): void
+        +exists(id: string): boolean
+        +count(): number
+        +clear(): void
+    }
+
+    class PaperExecutionStore {
+        +tableName: string = "paper_executions"
+        +save(ex: PaperExecution): void
+        +findById(id: string): PaperExecution | undefined
+        +findAll(): PaperExecution[]
+        +delete(id: string): void
+    }
+
+    class BaseLedgerStore~T~ {
+        <<abstract>>
+        #abstract tableName: string
+        +listRecent(limit: number, timeField: keyof T): T[]
+        +findByField(field: keyof T, value: unknown): T | undefined
+    }
+
+    class InternalTransferLedgerStore {
+        +tableName: string = "internal_transfer_ledger"
+        +createRecord(record: InternalTransferLedgerRecord): void
+        +updateRecord(id: string, patch: Partial~InternalTransferLedgerRecord~): void
+        +findByIdempotencyKey(key: string): InternalTransferLedgerRecord | undefined
+        +listRecent(limit: number): InternalTransferLedgerRecord[]
+    }
+
+    class OrderExecutionLedgerStore {
+        +tableName: string = "order_execution_ledger"
+        +saveExecution(result: TwoLegOrderExecutionResult): void
+        +updateExecution(id: string, patch: Partial~TwoLegOrderExecutionResult~): void
+        +findById(id: string): TwoLegOrderExecutionResult | null
+        +listRecent(limit: number): TwoLegOrderExecutionResult[]
+        #normalize(row: any): TwoLegOrderExecutionResult
+    }
+
+    class OrderPlanLedgerStore {
+        +tableName: string = "order_plan_ledger"
+        +savePlan(plan: TwoLegOrderPlan): void
+        +findById(id: string): TwoLegOrderPlan | null
+        +listRecent(limit: number): TwoLegOrderPlan[]
+        #parse(raw: any): TwoLegOrderPlan
+    }
+
+    class KillSwitchStore {
+        +tableName: string = "kill_switch"
+        +load(): KillSwitchState
+        +save(state: KillSwitchState): void
+        #validateState(s: string): boolean
+    }
+
+    IPersistenceRepository <.. BasePersistence~T~ : uses
+    BasePersistence~T~ <|-- PaperExecutionStore : extends
+    BasePersistence~T~ <|-- BaseLedgerStore~T~ : extends
+    BaseLedgerStore~T~ <|-- InternalTransferLedgerStore : extends
+    BaseLedgerStore~T~ <|-- OrderExecutionLedgerStore : extends
+    BaseLedgerStore~T~ <|-- OrderPlanLedgerStore : extends
+    BasePersistence~T~ <|-- KillSwitchStore : extends

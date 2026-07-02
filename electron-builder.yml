@@ -1,0 +1,82 @@
+# electron-builder 配置
+#
+# 打包策略：不使用 asar，直接将整个项目目录拷贝到 resources/
+# 这样 better-sqlite3（原生模块）和 Next.js 都能正常工作
+#
+# 目录结构（安装后）:
+#   [安装目录]/
+#     FundingArbitrageDashboard.exe
+#     resources/
+#       app/              ← 整个项目拷贝（.next/ + node_modules/ + 源码）
+#       .env              ← 内置配置文件
+#
+# 用户数据:
+#   %APPDATA%/FundingArbitrageDashboard/
+#     data/v121.sqlite   ← SQLite 数据库，首次使用时自动创建
+#     data/.env          ← 用户可在此修改环境变量
+
+appId: com.funding-arbitrage.dashboard
+productName: FundingArbitrageDashboard
+copyright: Copyright © 2026
+
+directories:
+  output: dist
+
+# 把整个项目作为额外资源拷贝到 resources/app/
+extraResources:
+  - from: ./
+    to: app
+    filter:
+      # 只包含 build 产物和运行时必需的
+      - ".next/**"
+      - "node_modules/**"
+      - "package.json"
+      - "next.config.ts"
+      - "electron/**"
+      - "lib/**"
+      - "app/**"
+      - "public/**"
+      - "scripts/**"
+      - "tsconfig.json"
+      - "postcss.config.js"
+      - "tailwind.config.ts"
+      # 排除开发/无用文件以减小体积
+      - "!**/*.map"
+      - "!.next/cache/**"
+      - "!node_modules/.cache/**"
+      - "!.workbuddy/**"
+      - "!docs/**"
+      - "!.git/**"
+      - "!__test_discover__*"
+  - from: .env.package
+    to: .env
+
+# Windows 配置
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  artifactName: "${productName}-Setup-${version}.${ext}"
+
+# NSIS 安装器
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  deleteAppDataOnUninstall: false
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Funding Arbitrage
+
+# Electron 主程序本身
+files:
+  - electron/**          # Electron 主进程代码
+  - package.json
+  - "!node_modules/**"   # node_modules 已通过 extraResources 包含
+
+# 不使用 asar（避免原生模块兼容问题）
+asar: false
+
+# Electron 版本
+electronVersion: "33.4.0"
